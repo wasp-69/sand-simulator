@@ -2,45 +2,53 @@ import time
 
 class Cell:
 
-    def __init__(self, state=0):
+    def __init__(self, row, col, state=0):
         self.state = state
-
-    def update(self, x_pos, y_pos, grid):
-        if self.state == 0:
-            return
-        
-        if y_pos < grid.height - 1 and grid.matrix[y_pos+1][x_pos].state == 0: # down movement logic
-            grid.matrix[y_pos][x_pos].state = 0
-            grid.matrix[y_pos+1][x_pos].state = 1
-        else:
-
-            if x_pos > 0 and y_pos < grid.height - 1 and grid.matrix[y_pos+1][x_pos-1].state == 0: # diagonal left movement logic
-                grid.matrix[y_pos][x_pos].state = 0
-                grid.matrix[y_pos+1][x_pos-1].state = 1
-            elif x_pos < grid.length - 1 and y_pos < grid.height - 1 and grid.matrix[y_pos+1][x_pos+1].state == 0: # diagonal right movement logic
-                grid.matrix[y_pos][x_pos].state = 0
-                grid.matrix[y_pos+1][x_pos+1].state = 1
-            else:
-
-                if x_pos > 0 and y_pos < grid.height - 1 and grid.matrix[y_pos][x_pos-1].state == 0: # left movement logic
-                    grid.matrix[y_pos][x_pos].state = 0
-                    grid.matrix[y_pos][x_pos-1].state = 1
-                elif x_pos < grid.length - 1 and grid.matrix[y_pos][x_pos+1].state == 0: # right movement logic
-                    grid.matrix[y_pos][x_pos].state = 0
-                    grid.matrix[y_pos][x_pos+1].state = 1
-
-
+        self.row = row
+        self.col = col
 
 class Grid:
     
     def __init__(self, length, height):
         self.length = length
         self.height = height
-        self.matrix = [[Cell() for _ in range(length)]
-                       for _ in range(height)]
+        self.matrix = [[Cell(row=row, col=col) for col in range(length)]
+                       for row in range(height)]
 
     def set_state(self, cell_x, cell_y, value):
         self.matrix[cell_y][cell_x].state = value
+
+    def update(self):
+        new_matrix = [[Cell(row=row, col=col) for col in range(self.length)]
+                    for row in range(self.height)]
+
+        for row in self.matrix:
+            for current_cell in row:
+                if current_cell.state == 0:
+                    continue
+
+                down = current_cell.row + 1
+                left = current_cell.col - 1
+                right = current_cell.col + 1
+
+                if down > self.height - 1:
+                    new_matrix[current_cell.row][current_cell.col].state = 1
+                    continue
+
+                can_right = right <= self.length - 1
+                can_left = left >= 0
+
+                if self.matrix[down][current_cell.col].state == new_matrix[down][current_cell.col].state == 0:
+                    new_matrix[down][current_cell.col].state = 1
+                elif can_right and self.matrix[down][right].state == new_matrix[down][right].state == 0:
+                    new_matrix[down][right].state = 1
+                elif can_left and self.matrix[down][left].state == new_matrix[down][left].state == 0:
+                    new_matrix[down][left].state = 1
+                else:
+                    new_matrix[current_cell.row][current_cell.col].state = 1
+
+        self.matrix = new_matrix
+
 
     def show(self):
         grid = ""
@@ -63,15 +71,18 @@ def main():
     grid.set_state(6,0,1)
     grid.set_state(3,1,1)
     grid.set_state(7,1,1)
+    grid.set_state(0,3,1)
+    grid.set_state(0,4,1)
+    grid.set_state(0,5,1)
+    grid.set_state(0,6,1)
+
 
     while True:
-        for x_pos in range(grid.length -1, -1, -1):
-            for y_pos in range(grid.height - 1, -1, -1):
-                grid.matrix[y_pos][x_pos].update(x_pos, y_pos, grid)
-
+        
+        grid.update()
         grid.show()
 
-        time.sleep(0.2)
+        time.sleep(0.1)
 
 if __name__ == "__main__":
     main()
