@@ -1,4 +1,7 @@
 import time
+import sys
+
+L, B = 10, 10
 
 class Cell:
 
@@ -49,23 +52,33 @@ class Grid:
 
         self.matrix = new_matrix
 
-
-    def show(self):
+    def show(self, extra=0):
         grid = ""
         for row in self.matrix:
             for element in row:
-                grid += "▩" if element.state else "∙"
+                if element.state == 0:
+                    grid += "∙"
+                elif element.state == 1:
+                    grid += "▩"
+                elif element.state == 2:
+                    grid += "▢"
                 grid += " "
             grid += "\n"
         print("\033[2J\033[H", end="", flush=True)
         print(grid, end="", flush=True)
         print("_ "*self.length, flush=True)
+        if extra:
+            print(extra)
 
-
+def place_grains():
+    ... # work on this
 
 def main():
-    grid = Grid(10,10)
-    grid.show()
+    # grains = place_grains()
+
+    grid = Grid(L,B)
+    # for i, j in grains:
+    #     grid.set_state(i,j,1)
     grid.set_state(5,0,1)
     grid.set_state(4,0,1)
     grid.set_state(6,0,1)
@@ -76,14 +89,13 @@ def main():
     grid.set_state(0,5,1)
     grid.set_state(0,6,1)
 
-
     while True:
-        
         grid.update()
         grid.show()
 
         time.sleep(0.1)
 
+
+
 if __name__ == "__main__":
     main()
-
