@@ -3,7 +3,7 @@ import sys
 import random
 
 L, B = 30, 30 # length and height of the grid
-tickrate = 0.020 # increase if experiencing stutter
+tickrate = 0.02 # increase if experiencing stutter
 
 class Cell:
 
@@ -37,6 +37,8 @@ class Grid:
         new_matrix = [[Cell(row=row, col=col, grid=self) for col in range(self.length)]
                     for row in range(self.height)]
 
+        change = 0
+
         for row in self.matrix:
             for current_cell in row:
                 if current_cell.state == 0:
@@ -57,29 +59,41 @@ class Grid:
 
                 if self.matrix[down][current_cell.col].state == new_matrix[down][current_cell.col].state == 0:
                     new_matrix[down][current_cell.col].state = 1
+                    change += 1
                 elif can_right and self.matrix[down][right].state == new_matrix[down][right].state == 0:
                     new_matrix[down][right].state = 1
+                    change += 1
                 elif can_left and self.matrix[down][left].state == new_matrix[down][left].state == 0:
                     new_matrix[down][left].state = 1
+                    change += 1
                 else:
                     new_matrix[current_cell.row][current_cell.col].state = 1
 
         self.matrix = new_matrix
+        return change
 
 
     def handle_pointer(self, key):
+        change = 0
         if key == "UP":
             self.pointer_y = (self.pointer_y - 1) % self.height
+            change += 1
         if key == "DOWN":
             self.pointer_y = (self.pointer_y + 1) % self.height
+            change += 1
         if key == "LEFT":
             self.pointer_x = (self.pointer_x - 1) % self.length
+            change += 1
         if key == "RIGHT":
             self.pointer_x = (self.pointer_x + 1) % self.length
+            change += 1
+        return change
 
     def handle_action(self, key):
         if key == " ":
             self.matrix[self.pointer_y][self.pointer_x].toggle_state()
+            return 1
+        return 0
 
     def show(self, extra=0):
         grid = ""
@@ -122,14 +136,19 @@ def get_key():
 def main():
 
     grid = Grid(L,B)
+    grid.show(extra=f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) \nGrains: {sum(cell.state for row in grid.matrix for cell in row)}/{L*B}")
+
 
     while True:
         pressed_key = get_key()
 
-        grid.update()
-        grid.handle_pointer(pressed_key)
-        grid.handle_action(pressed_key)
-        grid.show(extra=f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) \nGrains: {sum(cell.state for row in grid.matrix for cell in row)}/{L*B}")
+        update_count = 0
+
+        update_count += grid.handle_pointer(pressed_key)
+        update_count += grid.update()
+        update_count += grid.handle_action(pressed_key)
+        if update_count > 0:
+            grid.show(extra=f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) \nGrains: {sum(cell.state for row in grid.matrix for cell in row)}/{L*B}")
 
         time.sleep(tickrate)
 
