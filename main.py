@@ -1,45 +1,58 @@
 import time
 import sys
+import random
 
-L, B = 10, 10
+L, B = 30, 30
 
 class Cell:
 
-    def __init__(self, row, col, state=0):
+    def __init__(self, row, col, grid, state=0):
         self.state = state
         self.row = row
         self.col = col
+        if grid.pointer_x == col and grid.pointer_y == row:
+            self.pointer = 1
+        else:
+            self.pointer = 0
+
+    def toggle_state(self):
+        self.state = 1 - self.state
 
 class Grid:
     
     def __init__(self, length, height):
         self.length = length
         self.height = height
-        self.matrix = [[Cell(row=row, col=col) for col in range(length)]
+        self.show_pointer = 1
+        self.pointer_x = 0
+        self.pointer_y = 0
+        self.matrix = [[Cell(row=row, col=col, grid=self) for col in range(length)]
                        for row in range(height)]
 
     def set_state(self, cell_x, cell_y, value):
         self.matrix[cell_y][cell_x].state = value
 
     def update(self):
-        new_matrix = [[Cell(row=row, col=col) for col in range(self.length)]
+        new_matrix = [[Cell(row=row, col=col, grid=self) for col in range(self.length)]
                     for row in range(self.height)]
 
         for row in self.matrix:
             for current_cell in row:
                 if current_cell.state == 0:
                     continue
-
+                
+                bias = random.choice([1,-1])
+                
                 down = current_cell.row + 1
-                left = current_cell.col - 1
-                right = current_cell.col + 1
+                left = current_cell.col - bias
+                right = current_cell.col + bias
 
                 if down > self.height - 1:
                     new_matrix[current_cell.row][current_cell.col].state = 1
                     continue
 
-                can_right = right <= self.length - 1
-                can_left = left >= 0
+                can_right = right <= self.length - bias and right >= 0
+                can_left = left <= self.length + bias and left >= 0
 
                 if self.matrix[down][current_cell.col].state == new_matrix[down][current_cell.col].state == 0:
                     new_matrix[down][current_cell.col].state = 1
@@ -52,16 +65,35 @@ class Grid:
 
         self.matrix = new_matrix
 
+
+    def handle_pointer(self, key):
+        if key == "UP":
+            self.pointer_y = (self.pointer_y - 1) % self.height
+        if key == "DOWN":
+            self.pointer_y = (self.pointer_y + 1) % self.height
+        if key == "LEFT":
+            self.pointer_x = (self.pointer_x - 1) % self.length
+        if key == "RIGHT":
+            self.pointer_x = (self.pointer_x + 1) % self.length
+
+    def handle_action(self, key):
+        if key == " ":
+            self.matrix[self.pointer_y][self.pointer_x].toggle_state()
+
     def show(self, extra=0):
         grid = ""
         for row in self.matrix:
             for element in row:
-                if element.state == 0:
-                    grid += "∙"
-                elif element.state == 1:
-                    grid += "▩"
-                elif element.state == 2:
-                    grid += "▢"
+                if element.pointer:
+                    if element.state == 0:
+                        grid += "○"
+                    elif element.state == 1:
+                        grid += "◉"
+                else:
+                    if element.state == 0:
+                        grid += "∙"
+                    elif element.state == 1:
+                        grid += "▩"
                 grid += " "
             grid += "\n"
         print("\033[2J\033[H", end="", flush=True)
@@ -70,30 +102,33 @@ class Grid:
         if extra:
             print(extra)
 
-def place_grains():
-    ... # work on this
+
+def get_key():
+    if sys.platform == "win32":
+        import msvcrt
+        if not msvcrt.kbhit():
+            return None          
+        ch = msvcrt.getch()
+        if ch in (b'\x00', b'\xe0'):
+            ch2 = msvcrt.getch()
+            return {'H': 'UP', 'P': 'DOWN', 'K': 'LEFT', 'M': 'RIGHT'}.get(
+                ch2.decode('utf-8', errors='ignore'))
+        return ch.decode('utf-8', errors='ignore')
+
 
 def main():
-    # grains = place_grains()
 
     grid = Grid(L,B)
-    # for i, j in grains:
-    #     grid.set_state(i,j,1)
-    grid.set_state(5,0,1)
-    grid.set_state(4,0,1)
-    grid.set_state(6,0,1)
-    grid.set_state(3,1,1)
-    grid.set_state(7,1,1)
-    grid.set_state(0,3,1)
-    grid.set_state(0,4,1)
-    grid.set_state(0,5,1)
-    grid.set_state(0,6,1)
 
     while True:
+        pressed_key = get_key()
+
         grid.update()
+        grid.handle_pointer(pressed_key)
+        grid.handle_action(pressed_key)
         grid.show()
 
-        time.sleep(0.1)
+        time.sleep(0.02)
 
 
 
