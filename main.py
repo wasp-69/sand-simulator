@@ -2,7 +2,8 @@ import time
 import sys
 import random
 
-L, B = 30, 30
+L, B = 30, 30 # length and height of the grid
+tickrate = 0.020 # increase if experiencing stutter
 
 class Cell:
 
@@ -86,14 +87,18 @@ class Grid:
             for element in row:
                 if element.pointer:
                     if element.state == 0:
-                        grid += "○"
+                        grid += "\033[38;2;214;180;252m○\033[0m"
+                        # grid += "○"
                     elif element.state == 1:
-                        grid += "◉"
+                        grid += "\033[38;2;214;180;252m◉"
+                        # grid += "◉"
                 else:
                     if element.state == 0:
-                        grid += "∙"
+                        grid += "\033[38;5;242m∙\033[0m"
+                        # grid += "∙"
                     elif element.state == 1:
-                        grid += "▩"
+                        grid += "\033[38;2;224;195;144m▩\033[0m"
+                        # grid += "▩"
                 grid += " "
             grid += "\n"
         print("\033[2J\033[H", end="", flush=True)
@@ -101,7 +106,6 @@ class Grid:
         print("_ "*self.length, flush=True)
         if extra:
             print(extra)
-
 
 def get_key():
     if sys.platform == "win32":
@@ -115,7 +119,6 @@ def get_key():
                 ch2.decode('utf-8', errors='ignore'))
         return ch.decode('utf-8', errors='ignore')
 
-
 def main():
 
     grid = Grid(L,B)
@@ -126,11 +129,9 @@ def main():
         grid.update()
         grid.handle_pointer(pressed_key)
         grid.handle_action(pressed_key)
-        grid.show()
+        grid.show(extra=f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) \nGrains: {sum(cell.state for row in grid.matrix for cell in row)}/{L*B}")
 
-        time.sleep(0.02)
-
-
+        time.sleep(tickrate)
 
 if __name__ == "__main__":
     main()
