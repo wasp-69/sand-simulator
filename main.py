@@ -12,9 +12,6 @@ class Cell:
         self.row = row
         self.col = col
 
-    def toggle_state(self):
-        self.state = 1 - self.state
-
 class Grid:
     
     def __init__(self, length, height):
@@ -24,6 +21,7 @@ class Grid:
         self.pointer_x = 0
         self.pointer_y = 0
         self.brush_size = 0
+        self.brush_type = 1
         self.matrix = [[Cell(row=row, col=col) for col in range(length)]
                        for row in range(height)]
 
@@ -48,23 +46,36 @@ class Grid:
                 right = current_cell.col + bias
 
                 if down > self.height - 1:
-                    new_matrix[current_cell.row][current_cell.col].state = 1
+                    new_matrix[current_cell.row][current_cell.col].state = current_cell.state
                     continue
 
                 can_right = right <= self.length - bias and right >= 0
                 can_left = left <= self.length + bias and left >= 0
 
-                if self.matrix[down][current_cell.col].state == new_matrix[down][current_cell.col].state == 0:
-                    new_matrix[down][current_cell.col].state = 1
-                    change += 1
-                elif can_right and self.matrix[down][right].state == new_matrix[down][right].state == 0:
-                    new_matrix[down][right].state = 1
-                    change += 1
-                elif can_left and self.matrix[down][left].state == new_matrix[down][left].state == 0:
-                    new_matrix[down][left].state = 1
-                    change += 1
-                else:
-                    new_matrix[current_cell.row][current_cell.col].state = 1
+                if current_cell.state == 1: # if the current cell is sand
+                    if self.matrix[down][current_cell.col].state == new_matrix[down][current_cell.col].state == 0:
+                        new_matrix[down][current_cell.col].state = 1
+                        change += 1
+                    elif can_right and self.matrix[down][right].state == new_matrix[down][right].state == 0:
+                        new_matrix[down][right].state = 1
+                        change += 1
+                    elif can_left and self.matrix[down][left].state == new_matrix[down][left].state == 0:
+                        new_matrix[down][left].state = 1
+                        change += 1
+                    else:
+                        new_matrix[current_cell.row][current_cell.col].state = 1
+                elif current_cell.state == 2: # if the current cell is water
+                    if self.matrix[down][current_cell.col].state == new_matrix[down][current_cell.col].state == 0:
+                        new_matrix[down][current_cell.col].state = 2
+                        change += 1
+                    elif can_right and self.matrix[current_cell.row][right].state == new_matrix[current_cell.row][right].state == 0:
+                        new_matrix[current_cell.row][right].state = 2
+                        change += 1
+                    elif can_left and self.matrix[current_cell.row][left].state == new_matrix[current_cell.row][left].state == 0:
+                        new_matrix[current_cell.row][left].state = 2
+                        change += 1
+                    else:
+                        new_matrix[current_cell.row][current_cell.col].state = 2
 
         self.matrix = new_matrix
         return change
@@ -89,25 +100,36 @@ class Grid:
     def handle_action(self, key):
         if key == " ":
             if self.brush_size == 0:
-                self.matrix[self.pointer_y][self.pointer_x].toggle_state()
+                self.matrix[self.pointer_y][self.pointer_x].state = self.brush_type
             else:
                 for x in range(self.pointer_x - self.brush_size, self.pointer_x + self.brush_size+1):
                     for y in range(self.pointer_y - self.brush_size, self.pointer_y + self.brush_size+1):
                         if y >= 0 and y <= self.height - 1:
                             if x >= 0 and x <= self.length - 1:
-                                self.matrix[y][x].toggle_state()
+                                self.matrix[y][x].state = self.brush_type
                 return 1
         return 0
 
     def handle_brush_size(self, key):
+        change = 0
         if key == "-":
             self.brush_size = max(-1, self.brush_size - 1)
-            return 1
+            change += 1
         if key == "=":
             self.brush_size = min(self.brush_size + 1, 4)
-            return 1
-        return 0
+            change += 1
+        return change
 
+    def handle_brush_type(self, key, elements):
+        change = 0
+        if key == "q":
+            self.brush_type = (self.brush_type - 1) % len(elements)
+            change += 1
+        if key == "e":
+            self.brush_type = (self.brush_type + 1) % len(elements)
+            change += 1
+        return change
+    
     def show(self, extra=0):
         grid = ""
         for row in self.matrix:
@@ -115,10 +137,13 @@ class Grid:
                 on_pointer = (element.row == self.pointer_y and element.col == self.pointer_x)
                 if on_pointer and self.show_pointer:
                     if element.state == 0:
+                        grid += "\033[38;2;214;180;252m◌\033[0m"
+                        # grid += "◌"
+                    elif element.state == 1:
                         grid += "\033[38;2;214;180;252m○\033[0m"
                         # grid += "○"
-                    elif element.state == 1:
-                        grid += "\033[38;2;214;180;252m●"
+                    elif element.state == 2:
+                        grid += "\033[38;2;214;180;252m●\033[0m"
                         # grid += "●"
                 else:
                     if element.state == 0:
@@ -127,6 +152,9 @@ class Grid:
                     elif element.state == 1:
                         grid += "\033[38;2;224;195;144m▩\033[0m"
                         # grid += "▩"
+                    elif element.state == 2:
+                        grid += "\033[38;2;52;128;235m■\033[0m"
+                        # grid += "■"
                 grid += " "
             grid += "\n"
         print("\033[2J\033[H", end="", flush=True)
@@ -152,7 +180,8 @@ def main():
     elements = {0: "Air", 1: "Sand", 2: "Water", 3: "Sandstone"}
 
     grid = Grid(L,B)
-    grid.show(extra=f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}] \nBrush Size: {grid.brush_size+1}")
+    grid.show(extra=f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}] \nBrush Size: <{grid.brush_size+1}> [{elements[grid.brush_type]}]")
+
 
     while True:
         pressed_key = get_key()
@@ -163,12 +192,13 @@ def main():
         update_count += grid.handle_pointer(pressed_key)
         update_count += grid.handle_action(pressed_key)
         update_count += grid.handle_brush_size(pressed_key)
+        update_count += grid.handle_brush_type(pressed_key, elements)
         if grid.brush_size == -1:
             grid.show_pointer = False
         else:
             grid.show_pointer = True
         if update_count > 0:
-            grid.show(extra=f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}] \nBrush Size: {grid.brush_size+1}")
+            grid.show(extra=f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}] \nBrush Size: <{grid.brush_size+1}> [{elements[grid.brush_type]}]")
 
         time.sleep(tickrate)
 
