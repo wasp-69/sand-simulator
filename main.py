@@ -7,14 +7,10 @@ tickrate = 0.02 # increase if experiencing stutter
 
 class Cell:
 
-    def __init__(self, row, col, grid, state=0):
+    def __init__(self, row, col, state=0):
         self.state = state
         self.row = row
         self.col = col
-        if grid.pointer_x == col and grid.pointer_y == row:
-            self.pointer = 1
-        else:
-            self.pointer = 0
 
     def toggle_state(self):
         self.state = 1 - self.state
@@ -27,14 +23,14 @@ class Grid:
         self.show_pointer = 1
         self.pointer_x = 0
         self.pointer_y = 0
-        self.matrix = [[Cell(row=row, col=col, grid=self) for col in range(length)]
+        self.matrix = [[Cell(row=row, col=col) for col in range(length)]
                        for row in range(height)]
 
     def set_state(self, cell_x, cell_y, value):
         self.matrix[cell_y][cell_x].state = value
 
     def update(self):
-        new_matrix = [[Cell(row=row, col=col, grid=self) for col in range(self.length)]
+        new_matrix = [[Cell(row=row, col=col) for col in range(self.length)]
                     for row in range(self.height)]
 
         change = 0
@@ -99,7 +95,8 @@ class Grid:
         grid = ""
         for row in self.matrix:
             for element in row:
-                if element.pointer:
+                on_pointer = (element.row == self.pointer_y and element.col == self.pointer_x)
+                if on_pointer:
                     if element.state == 0:
                         grid += "\033[38;2;214;180;252m○\033[0m"
                         # grid += "○"
@@ -144,8 +141,8 @@ def main():
 
         update_count = 0
 
-        update_count += grid.handle_pointer(pressed_key)
         update_count += grid.update()
+        update_count += grid.handle_pointer(pressed_key)
         update_count += grid.handle_action(pressed_key)
         if update_count > 0:
             grid.show(extra=f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) \nGrains: {sum(cell.state for row in grid.matrix for cell in row)}/{L*B}")
