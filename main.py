@@ -23,6 +23,7 @@ class Grid:
         self.show_pointer = 1
         self.pointer_x = 0
         self.pointer_y = 0
+        self.brush_size = 0
         self.matrix = [[Cell(row=row, col=col) for col in range(length)]
                        for row in range(height)]
 
@@ -87,7 +88,23 @@ class Grid:
 
     def handle_action(self, key):
         if key == " ":
-            self.matrix[self.pointer_y][self.pointer_x].toggle_state()
+            if self.brush_size == 0:
+                self.matrix[self.pointer_y][self.pointer_x].toggle_state()
+            else:
+                for x in range(self.pointer_x - self.brush_size, self.pointer_x + self.brush_size+1):
+                    for y in range(self.pointer_y - self.brush_size, self.pointer_y + self.brush_size+1):
+                        if y >= 0 and y <= self.height - 1:
+                            if x >= 0 and x <= self.length - 1:
+                                self.matrix[y][x].toggle_state()
+                return 1
+        return 0
+
+    def handle_brush_size(self, key):
+        if key == "-":
+            self.brush_size = max(-1, self.brush_size - 1)
+            return 1
+        if key == "=":
+            self.brush_size = min(self.brush_size + 1, 4)
             return 1
         return 0
 
@@ -96,13 +113,13 @@ class Grid:
         for row in self.matrix:
             for element in row:
                 on_pointer = (element.row == self.pointer_y and element.col == self.pointer_x)
-                if on_pointer:
+                if on_pointer and self.show_pointer:
                     if element.state == 0:
                         grid += "\033[38;2;214;180;252m○\033[0m"
                         # grid += "○"
                     elif element.state == 1:
-                        grid += "\033[38;2;214;180;252m◉"
-                        # grid += "◉"
+                        grid += "\033[38;2;214;180;252m●"
+                        # grid += "●"
                 else:
                     if element.state == 0:
                         grid += "\033[38;5;242m∙\033[0m"
@@ -114,9 +131,10 @@ class Grid:
             grid += "\n"
         print("\033[2J\033[H", end="", flush=True)
         print(grid, end="", flush=True)
-        print("_ "*self.length, flush=True)
+        print("= "*self.length, flush=True)
         if extra:
             print(extra)
+
 
 def get_key():
     if sys.platform == "win32":
@@ -131,10 +149,10 @@ def get_key():
         return ch.decode('utf-8', errors='ignore')
 
 def main():
+    elements = {0: "Air", 1: "Sand", 2: "Water", 3: "Sandstone"}
 
     grid = Grid(L,B)
-    grid.show(extra=f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) \nGrains: {sum(cell.state for row in grid.matrix for cell in row)}/{L*B}")
-
+    grid.show(extra=f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}] \nBrush Size: {grid.brush_size+1}")
 
     while True:
         pressed_key = get_key()
@@ -144,10 +162,20 @@ def main():
         update_count += grid.update()
         update_count += grid.handle_pointer(pressed_key)
         update_count += grid.handle_action(pressed_key)
+        update_count += grid.handle_brush_size(pressed_key)
+        if grid.brush_size == -1:
+            grid.show_pointer = False
+        else:
+            grid.show_pointer = True
         if update_count > 0:
-            grid.show(extra=f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) \nGrains: {sum(cell.state for row in grid.matrix for cell in row)}/{L*B}")
+            grid.show(extra=f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}] \nBrush Size: {grid.brush_size+1}")
 
         time.sleep(tickrate)
 
 if __name__ == "__main__":
     main()
+
+# sandstone: ◙
+# sandstone pointer: ◉
+# water: ■
+# water pointer: ◒
