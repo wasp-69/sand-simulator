@@ -77,6 +77,8 @@ class Grid:
                         new_matrix[current_cell.row][current_cell.col].state = 1
                         change += 1
 
+                    # >>> add diagonal sand swaps
+
                     else:
                         new_matrix[current_cell.row][current_cell.col].state = 2
 
