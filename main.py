@@ -21,6 +21,7 @@ class Grid:
         self.max_brush_size = max_brush_size
         self.brush_size = default_brush_size
         self.brush_type = 1
+
         self.matrix = [[Cell(row=row, col=col) for col in range(length)]
                        for row in range(height)]
 
@@ -212,9 +213,9 @@ def main():
         update_count += grid.handle_brush_type(pressed_key, elements)
 
         if grid.brush_size == 0:
-            grid.show_pointer = False
+            grid.show_pointer = 0
         else:
-            grid.show_pointer = True
+            grid.show_pointer = 1
 
         if update_count > 0:
             grid.show(extra=f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}] \nBrush Size: <{grid.brush_size}> [{elements[grid.brush_type]}]")
