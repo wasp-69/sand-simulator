@@ -1,6 +1,7 @@
-import time
 import sys
 import random
+from time import sleep
+from dataclasses import dataclass
 
 class Cell:
 
@@ -8,6 +9,7 @@ class Cell:
         self.state = state
         self.row = row
         self.col = col
+        self.update = True
 
 class Grid:
     
@@ -27,80 +29,72 @@ class Grid:
     def set_state(self, cell_x, cell_y, value):
         self.matrix[cell_y][cell_x].state = value
 
+    def reset_update_flags(self):
+        for x in range(0, self.length):
+            for y in range(0, self.height):
+                self.matrix[y][x].update = True
+    
     def update(self):
-        new_matrix = [[Cell(row=row, col=col) for col in range(self.length)]
-                    for row in range(self.height)]
+        for x in range(0, self.length):
+            for y in range(self.height-1, -1, -1):
 
-        change = 0
-
-        for row in self.matrix:
-            for current_cell in row:
-                if current_cell.state == 0:
+                cell = self.matrix[y][x] # scans left to right, bottom to top
+                if not cell.update:
                     continue
+                up = y - 1
+                down = y + 1
+                left = x - 1
+                right = x + 1
+                can_up = 0 <= up < self.height
+                can_down = 0 <= down < self.height
+                can_left = 0 <= left < self.length
+                can_right = 0 <= right < self.length
+                if random.choice([0,1]):
+                    first_side = left
+                    first_check = can_left
+                    second_side = right
+                    second_check = can_right
+                else:
+                    first_side = right
+                    first_check = can_right
+                    second_side = left
+                    second_check = can_left
+
+                # this makes things order specific which can be bad but it's the most convenient way
+                dirs = (up, down, left, right, first_side, second_side)
+                checks = (can_up, can_down, can_left, can_right, first_check, second_check)
+
+                self.handle_sand(x, y, cell, dirs, checks) # to look into: first_check index error
+                # handle_water()
                 
-                bias = random.choice([1,-1])
-                
-                down = current_cell.row + 1
-                left = current_cell.col - bias
-                right = current_cell.col + bias
+                # sleep(0.05)
 
-                can_right = right <= self.length - bias and right >= 0
-                can_left = left <= self.length + bias and left >= 0
-                can_down = down < self.height
-
-                if current_cell.state == 1: # if the current cell is sand
-                    if can_down and self.matrix[down][current_cell.col].state == new_matrix[down][current_cell.col].state == 0:
-                        new_matrix[down][current_cell.col].state = 1
-                        change += 1
-                    elif can_down and can_right and self.matrix[down][right].state == new_matrix[down][right].state == 0:
-                        new_matrix[down][right].state = 1
-                        change += 1
-                    elif can_down and can_left and self.matrix[down][left].state == new_matrix[down][left].state == 0:
-                        new_matrix[down][left].state = 1
-                        change += 1
-                    else:
-                        new_matrix[current_cell.row][current_cell.col].state = 1
-
-                elif current_cell.state == 2: # if the current cell is water
-                    if can_down and self.matrix[down][current_cell.col].state == new_matrix[down][current_cell.col].state == 0:
-                        new_matrix[down][current_cell.col].state = 2
-                        change += 1
-                    elif can_right and self.matrix[current_cell.row][right].state == new_matrix[current_cell.row][right].state == 0:
-                        new_matrix[current_cell.row][right].state = 2
-                        change += 1
-                    elif can_left and self.matrix[current_cell.row][left].state == new_matrix[current_cell.row][left].state == 0:
-                        new_matrix[current_cell.row][left].state = 2
-                        change += 1
-
-                    elif current_cell.row > 0 and self.matrix[current_cell.row - 1][current_cell.col].state == 1:
-                        new_matrix[current_cell.row - 1][current_cell.col].state = 2
-                        new_matrix[current_cell.row][current_cell.col].state = 1
-                        change += 1
-
-                    # >>> add diagonal sand swaps
-
-                    else:
-                        new_matrix[current_cell.row][current_cell.col].state = 2
-
-        self.matrix = new_matrix
-        return change
-
+    def handle_sand(self, x, y, cell, dirs, checks):
+        up, down, left, right, first_side, second_side = dirs
+        can_up, can_down, can_left, can_right, first_check, second_check = checks
+        if cell.state == 1:
+            if can_down and self.matrix[down][x].state == 0:
+                self.matrix[y][x].state = 0
+                self.matrix[down][x].state = 1
+            elif can_down and first_check and self.matrix[down][first_side].state == 0:
+                self.matrix[y][x].state = 0
+                self.matrix[down][first_side].state = 1
+                self.matrix[down][first_side].update = False
+            elif can_down and second_check and self.matrix[down][second_side].state == 0:
+                self.matrix[y][x].state = 0
+                self.matrix[down][second_side].state = 1
+                self.matrix[down][first_side].update = False
+            
 
     def handle_pointer(self, key):
-        change = 0
         if key == "UP":
             self.pointer_y = (self.pointer_y - 1) % self.height
-            change += 1
         if key == "DOWN":
             self.pointer_y = (self.pointer_y + 1) % self.height
-            change += 1
         if key == "LEFT":
             self.pointer_x = (self.pointer_x - 1) % self.length
-            change += 1
         if key == "RIGHT":
             self.pointer_x = (self.pointer_x + 1) % self.length
-            change += 1
-        return change
 
     def handle_action(self, key):
         new_brush_size = self.brush_size - 1
@@ -113,28 +107,18 @@ class Grid:
                         if y >= 0 and y <= self.height - 1:
                             if x >= 0 and x <= self.length - 1:
                                 self.matrix[y][x].state = self.brush_type
-                return 1
-        return 0
 
     def handle_brush_size(self, key):
-        change = 0
         if key == "-":
             self.brush_size = max(self.min_brush_size, self.brush_size - 1)
-            change += 1
         if key == "=":
             self.brush_size = min(self.brush_size + 1, self.max_brush_size)
-            change += 1
-        return change
 
     def handle_brush_type(self, key, elements):
-        change = 0
         if key == "q":
             self.brush_type = (self.brush_type - 1) % len(elements)
-            change += 1
         if key == "e":
             self.brush_type = (self.brush_type + 1) % len(elements)
-            change += 1
-        return change
     
     def show(self, extra=0):
         grid = ""
@@ -203,23 +187,21 @@ def main():
     while True:
         pressed_key = get_keypress()
 
-        update_count = 0
-
-        update_count += grid.update()
-        update_count += grid.handle_pointer(pressed_key)
-        update_count += grid.handle_action(pressed_key)
-        update_count += grid.handle_brush_size(pressed_key)
-        update_count += grid.handle_brush_type(pressed_key, elements)
+        grid.update()
+        grid.reset_update_flags()
+        grid.handle_pointer(pressed_key)
+        grid.handle_action(pressed_key)
+        grid.handle_brush_size(pressed_key)
+        grid.handle_brush_type(pressed_key, elements)
 
         if grid.brush_size == 0:
             grid.show_pointer = False
         else:
             grid.show_pointer = True
 
-        if update_count > 0:
-            grid.show(extra=f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}] \nBrush Size: <{grid.brush_size}> [{elements[grid.brush_type]}]")
+        grid.show(extra=f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}] \nBrush Size: <{grid.brush_size}> [{elements[grid.brush_type]}]")
 
-        time.sleep(TICKRATE)
+        sleep(TICKRATE)
 
 
 if __name__ == "__main__":
