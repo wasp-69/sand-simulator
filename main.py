@@ -39,8 +39,6 @@ class Grid:
             for y in range(self.height-1, -1, -1):
 
                 cell = self.matrix[y][x] # scans left to right, bottom to top
-                if not cell.update:
-                    continue
                 up = y - 1
                 down = y + 1
                 left = x - 1
@@ -64,28 +62,64 @@ class Grid:
                 dirs = (up, down, left, right, first_side, second_side)
                 checks = (can_up, can_down, can_left, can_right, first_check, second_check)
 
-                self.handle_sand(x, y, cell, dirs, checks) # to look into: first_check index error
-                # handle_water()
+                self.handle_sand(x, y, cell, dirs, checks)
+                self.handle_water(x, y, cell, dirs, checks)
                 
-                # sleep(0.05)
+                # sleep(1)
 
     def handle_sand(self, x, y, cell, dirs, checks):
         up, down, left, right, first_side, second_side = dirs
         can_up, can_down, can_left, can_right, first_check, second_check = checks
         if cell.state == 1:
+
+            # for normal gravity 
             if can_down and self.matrix[down][x].state == 0:
                 self.matrix[y][x].state = 0
                 self.matrix[down][x].state = 1
-            elif can_down and first_check and self.matrix[down][first_side].state == 0:
+            elif cell.update and can_down and first_check and self.matrix[down][first_side].state == 0:
                 self.matrix[y][x].state = 0
                 self.matrix[down][first_side].state = 1
                 self.matrix[down][first_side].update = False
-            elif can_down and second_check and self.matrix[down][second_side].state == 0:
+            elif cell.update and can_down and second_check and self.matrix[down][second_side].state == 0:
                 self.matrix[y][x].state = 0
                 self.matrix[down][second_side].state = 1
-                self.matrix[down][first_side].update = False
-            
+                self.matrix[down][second_side].update = False
 
+            # for swapping with water (density swap)
+            elif can_down and self.matrix[down][x].state == 2:
+                self.matrix[y][x].state = 2
+                self.matrix[down][x].state = 1
+            elif cell.update and can_down and first_check and self.matrix[down][first_side].state == 2:
+                self.matrix[y][x].state = 2
+                self.matrix[down][first_side].state = 1
+                self.matrix[down][first_side].update = False
+            elif cell.update and can_down and second_check and self.matrix[down][second_side].state == 2:
+                self.matrix[y][x].state = 2
+                self.matrix[down][second_side].state = 1
+                self.matrix[down][second_side].update = False
+
+    def handle_water(self, x, y, cell, dirs, checks):
+        up, down, left, right, first_side, second_side = dirs
+        can_up, can_down, can_left, can_right, first_check, second_check = checks
+        if cell.state == 2:
+
+            # for normal gravity 
+            if can_down and self.matrix[down][x].state == 0:
+                self.matrix[y][x].state = 0
+                self.matrix[down][x].state = 2
+            elif cell.update and first_check and self.matrix[y][first_side].state == 0:
+                self.matrix[y][x].state = 0
+                self.matrix[y][first_side].state = 2
+                self.matrix[y][first_side].update = False
+            elif cell.update and second_check and self.matrix[y][second_side].state == 0:
+                self.matrix[y][x].state = 0
+                self.matrix[y][second_side].state = 2
+                self.matrix[y][second_side].update = False
+
+            # plan to add better behaviour:
+            # find to which side, left or right, does more empty cells exist
+            # then move to that side
+            
     def handle_pointer(self, key):
         if key == "UP":
             self.pointer_y = (self.pointer_y - 1) % self.height
@@ -99,14 +133,13 @@ class Grid:
     def handle_action(self, key):
         new_brush_size = self.brush_size - 1
         if key == " ":
-            if new_brush_size == 0:
-                self.matrix[self.pointer_y][self.pointer_x].state = self.brush_type
-            else:
-                for x in range(self.pointer_x - new_brush_size, self.pointer_x + new_brush_size+1):
-                    for y in range(self.pointer_y - new_brush_size, self.pointer_y + new_brush_size+1):
-                        if y >= 0 and y <= self.height - 1:
-                            if x >= 0 and x <= self.length - 1:
-                                self.matrix[y][x].state = self.brush_type
+            if new_brush_size < 0:
+                return
+            for x in range(self.pointer_x - new_brush_size, self.pointer_x + new_brush_size+1):
+                for y in range(self.pointer_y - new_brush_size, self.pointer_y + new_brush_size+1):
+                    if y >= 0 and y <= self.height - 1:
+                        if x >= 0 and x <= self.length - 1:
+                            self.matrix[y][x].state = self.brush_type
 
     def handle_brush_size(self, key):
         if key == "-":
@@ -135,6 +168,9 @@ class Grid:
                     elif element.state == 2:
                         grid += color("●", (214, 180, 252))
                         # grid += "●"
+                    elif element.state == 3:
+                        grid += color("◉", (214, 180, 252))
+                        # grid += "◉"
                 else:
                     if element.state == 0:
                         grid += color("∙", (10, 10, 10))
@@ -145,6 +181,9 @@ class Grid:
                     elif element.state == 2:
                         grid += color("■", (52, 128, 235))
                         # grid += "■"
+                    elif element.state == 3:
+                        grid += color("◙", (66, 35, 10))
+                        # grid += "◙"
                 grid += " "
             grid += "\n"
         print("\033[2J\033[H", end="", flush=True)
@@ -153,6 +192,14 @@ class Grid:
         if extra:
             print(extra)
 
+
+def handle_tickrate(key, tickrate):
+    if key == ",":
+        return min(2, tickrate + 0.01)
+    elif key == ".":
+        return max(0.01, tickrate - 0.01)
+    else:
+        return tickrate
 
 def color(str: str, rgb: tuple):
     r, g, b = rgb
@@ -172,8 +219,8 @@ def get_keypress():
 
 def main():
 
-    L, B = 20, 20 # length and height of the grid
-    TICKRATE = 0.02 # increase if experiencing stutter
+    L, B = 20, 20 # length and height of the grid [default: 20x20]
+    TICKRATE = 0.02 # increase if experiencing stutter [default: 0.02]
     MIN_BRUSH_SIZE = 0
     MAX_BRUSH_SIZE = 5
     DEFAULT_BRUSH_SIZE = 1
@@ -181,7 +228,7 @@ def main():
     elements = {0: "Air", 1: "Sand", 2: "Water", 3: "Sandstone"}
 
     grid = Grid(L,B, max_brush_size=MAX_BRUSH_SIZE, min_brush_size=MIN_BRUSH_SIZE, default_brush_size=DEFAULT_BRUSH_SIZE)
-    grid.show(extra=f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}] \nBrush Size: <{grid.brush_size}> [{elements[grid.brush_type]}]")
+    grid.show(extra=f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}] \nBrush: <{grid.brush_size}px> [{elements[grid.brush_type]}] \nFrame Rate: [{(1/TICKRATE):.0f}]")
 
 
     while True:
@@ -194,12 +241,14 @@ def main():
         grid.handle_brush_size(pressed_key)
         grid.handle_brush_type(pressed_key, elements)
 
+        TICKRATE = handle_tickrate(pressed_key, TICKRATE)
+
         if grid.brush_size == 0:
             grid.show_pointer = False
         else:
             grid.show_pointer = True
 
-        grid.show(extra=f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}] \nBrush Size: <{grid.brush_size}> [{elements[grid.brush_type]}]")
+        grid.show(extra=f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}] \nBrush: <{grid.brush_size}px> [{elements[grid.brush_type]}] \nFrame Rate: [{(1/TICKRATE):.0f}]")
 
         sleep(TICKRATE)
 
