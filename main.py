@@ -1,7 +1,7 @@
 import sys
 import random
 from time import sleep
-from dataclasses import dataclass
+from colorsys import hsv_to_rgb
 
 class Cell:
 
@@ -11,6 +11,54 @@ class Cell:
         self.col = col
         self.update = True
 
+    def up(self, grid, dist=1):
+        if grid.orientation == "up":
+            ...
+        if grid.orientation == "up":
+            ...
+        if grid.orientation == "up":
+            ...
+        if grid.orientation == "up":
+            ...
+        else: 
+            raise ValueError(f"invalid grid orientaion \"{grid.orientation}\"")
+        
+
+    def down(self, grid, dist=1):
+        if grid.orientation == "up":
+            ...
+        if grid.orientation == "up":
+            ...
+        if grid.orientation == "up":
+            ...
+        if grid.orientation == "up":
+            ...
+        else: 
+            raise ValueError(f"invalid grid orientaion \"{grid.orientation}\"")
+
+    def left(self, grid, dist=1):
+        if grid.orientation == "up":
+            ...
+        if grid.orientation == "up":
+            ...
+        if grid.orientation == "up":
+            ...
+        if grid.orientation == "up":
+            ...
+        else: 
+            raise ValueError(f"invalid grid orientaion \"{grid.orientation}\"")
+    
+    def right(self, grid, dist=1):
+        if grid.orientation == "up":
+            ...
+        if grid.orientation == "up":
+            ...
+        if grid.orientation == "up":
+            ...
+        if grid.orientation == "up":
+            ...
+        else: 
+            raise ValueError(f"invalid grid orientaion \"{grid.orientation}\"")
 class Grid:
     
     def __init__(self, length, height, min_brush_size=-1, max_brush_size=5, default_brush_size=1):
@@ -23,6 +71,7 @@ class Grid:
         self.max_brush_size = max_brush_size
         self.brush_size = default_brush_size
         self.brush_type = 1
+        self.orientation = "down"
 
         self.matrix = [[Cell(row=row, col=col) for col in range(length)]
                        for row in range(height)]
@@ -122,13 +171,13 @@ class Grid:
             # then move to that side
             
     def handle_pointer(self, key):
-        if key == "UP":
+        if key == "w":
             self.pointer_y = (self.pointer_y - 1) % self.height
-        if key == "DOWN":
+        if key == "s":
             self.pointer_y = (self.pointer_y + 1) % self.height
-        if key == "LEFT":
+        if key == "a":
             self.pointer_x = (self.pointer_x - 1) % self.length
-        if key == "RIGHT":
+        if key == "d":
             self.pointer_x = (self.pointer_x + 1) % self.length
 
     def handle_action(self, key):
@@ -154,23 +203,27 @@ class Grid:
         if key == "e":
             self.brush_type = (self.brush_type + 1) % len(elements)
     
-    def show(self, extra=0):
+    def show(self, hue, extra=0):
         grid = ""
+        r, g, b = hsv_to_rgb(hue/360,1,1)
+        r = round(r*255)
+        g = round(g*255)
+        b = round(b*255)
         for row in self.matrix:
             for element in row:
                 on_pointer = (element.row == self.pointer_y and element.col == self.pointer_x)
                 if on_pointer and self.show_pointer:
                     if element.state == 0:
-                        grid += color("◌", (214, 180, 252))
+                        grid += color("◌", (r, g, b))
                         # grid += "◌"
                     elif element.state == 1:
-                        grid += color("○", (214, 180, 252))
+                        grid += color("○", (r, g, b))
                         # grid += "○"
                     elif element.state == 2:
-                        grid += color("●", (214, 180, 252))
+                        grid += color("●", (r, g, b))
                         # grid += "●"
                     elif element.state == 3:
-                        grid += color("◉", (214, 180, 252))
+                        grid += color("◉", (r, g, b))
                         # grid += "◉"
                 else:
                     if element.state == 0:
@@ -194,13 +247,13 @@ class Grid:
             print(extra)
 
 
-def handle_tickrate(key, tickrate):
-    if key == ",":
-        return min(2, tickrate + 0.01)
-    elif key == ".":
-        return max(0.01, tickrate - 0.01)
+def handle_framerate(key, framerate): 
+    if key == ".":
+        return min(100, framerate + 1)
+    elif key == ",":
+        return max(1, framerate - 1)
     else:
-        return tickrate
+        return framerate
 
 def color(str: str, rgb: tuple):
     r, g, b = rgb
@@ -221,15 +274,17 @@ def get_keypress():
 def main():
 
     L, B = 20, 20 # length and height of the grid [default: 20x20]
-    TICKRATE = 0.02 # increase if experiencing stutter [default: 0.02]
+    FRAMERATE = 50 # decrease if experiencing stutter [default: 50]
     MIN_BRUSH_SIZE = 0
     MAX_BRUSH_SIZE = 5
     DEFAULT_BRUSH_SIZE = 1
+    HUE = 0
+    HUE_CHANGE = 1
 
     elements = {0: "Air", 1: "Sand", 2: "Water", 3: "Sandstone"}
 
     grid = Grid(L,B, max_brush_size=MAX_BRUSH_SIZE, min_brush_size=MIN_BRUSH_SIZE, default_brush_size=DEFAULT_BRUSH_SIZE)
-    grid.show(extra=f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}] \nBrush: <{grid.brush_size}px> [{elements[grid.brush_type]}] \nFrame Rate: [{(1/TICKRATE):.0f}]")
+    grid.show(hue=HUE, extra=f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}] \nBrush: <{grid.brush_size}px> [{elements[grid.brush_type]}] \nFrame Rate: [{(FRAMERATE):.0f}]")
 
 
     while True:
@@ -242,16 +297,19 @@ def main():
         grid.handle_brush_size(pressed_key)
         grid.handle_brush_type(pressed_key, elements)
 
-        TICKRATE = handle_tickrate(pressed_key, TICKRATE)
+        FRAMERATE = handle_framerate(pressed_key, FRAMERATE)
 
         if grid.brush_size == 0:
             grid.show_pointer = 0
         else:
             grid.show_pointer = 1
 
-        grid.show(extra=f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}] \nBrush: <{grid.brush_size}px> [{elements[grid.brush_type]}] \nFrame Rate: [{(1/TICKRATE):.0f}]")
+        if pressed_key == "`":
+            HUE_CHANGE = 1 - HUE_CHANGE
 
-        sleep(TICKRATE)
+        grid.show(hue=HUE, extra=f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}] \nBrush: <{grid.brush_size}px> [{elements[grid.brush_type]}] \nFrame Rate: [{FRAMERATE}]")
+        HUE += HUE_CHANGE
+        sleep(1/FRAMERATE)
 
 
 if __name__ == "__main__":
