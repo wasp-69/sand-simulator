@@ -10,55 +10,8 @@ class Cell:
         self.row = row
         self.col = col
         self.update = True
+        self.sand_color = (random.randint(-1, 2))/10
 
-    def up(self, grid, dist=1):
-        if grid.orientation == "up":
-            ...
-        if grid.orientation == "up":
-            ...
-        if grid.orientation == "up":
-            ...
-        if grid.orientation == "up":
-            ...
-        else: 
-            raise ValueError(f"invalid grid orientaion \"{grid.orientation}\"")
-        
-
-    def down(self, grid, dist=1):
-        if grid.orientation == "up":
-            ...
-        if grid.orientation == "up":
-            ...
-        if grid.orientation == "up":
-            ...
-        if grid.orientation == "up":
-            ...
-        else: 
-            raise ValueError(f"invalid grid orientaion \"{grid.orientation}\"")
-
-    def left(self, grid, dist=1):
-        if grid.orientation == "up":
-            ...
-        if grid.orientation == "up":
-            ...
-        if grid.orientation == "up":
-            ...
-        if grid.orientation == "up":
-            ...
-        else: 
-            raise ValueError(f"invalid grid orientaion \"{grid.orientation}\"")
-    
-    def right(self, grid, dist=1):
-        if grid.orientation == "up":
-            ...
-        if grid.orientation == "up":
-            ...
-        if grid.orientation == "up":
-            ...
-        if grid.orientation == "up":
-            ...
-        else: 
-            raise ValueError(f"invalid grid orientaion \"{grid.orientation}\"")
 class Grid:
     
     def __init__(self, length, height, min_brush_size=-1, max_brush_size=5, default_brush_size=1):
@@ -71,13 +24,13 @@ class Grid:
         self.max_brush_size = max_brush_size
         self.brush_size = default_brush_size
         self.brush_type = 1
-        self.orientation = "down"
 
         self.matrix = [[Cell(row=row, col=col) for col in range(length)]
                        for row in range(height)]
 
-    def set_state(self, cell_x, cell_y, value):
-        self.matrix[cell_y][cell_x].state = value
+    def swap(self, cell1: Cell, cell2: Cell):
+        cell1.state, cell2.state = cell2.state, cell1.state
+        cell1.sand_color, cell2.sand_color = cell2.sand_color, cell1.sand_color
 
     def reset_update_flags(self):
         for x in range(0, self.length):
@@ -124,28 +77,22 @@ class Grid:
 
             # for normal gravity 
             if can_down and self.matrix[down][x].state == 0:
-                self.matrix[y][x].state = 0
-                self.matrix[down][x].state = 1
+                self.swap(self.matrix[y][x], self.matrix[down][x])
             elif cell.update and can_down and first_check and self.matrix[down][first_side].state == 0:
-                self.matrix[y][x].state = 0
-                self.matrix[down][first_side].state = 1
+                self.swap(self.matrix[y][x], self.matrix[down][first_side])
                 self.matrix[down][first_side].update = False
             elif cell.update and can_down and second_check and self.matrix[down][second_side].state == 0:
-                self.matrix[y][x].state = 0
-                self.matrix[down][second_side].state = 1
+                self.swap(self.matrix[y][x], self.matrix[down][second_side])
                 self.matrix[down][second_side].update = False
 
             # for swapping with water (density swap)
             elif can_down and self.matrix[down][x].state == 2:
-                self.matrix[y][x].state = 2
-                self.matrix[down][x].state = 1
+                self.swap(self.matrix[y][x], self.matrix[down][x])
             elif cell.update and can_down and first_check and self.matrix[down][first_side].state == 2:
-                self.matrix[y][x].state = 2
-                self.matrix[down][first_side].state = 1
+                self.swap(self.matrix[y][x], self.matrix[down][first_side])
                 self.matrix[down][first_side].update = False
             elif cell.update and can_down and second_check and self.matrix[down][second_side].state == 2:
-                self.matrix[y][x].state = 2
-                self.matrix[down][second_side].state = 1
+                self.swap(self.matrix[y][x], self.matrix[down][second_side])
                 self.matrix[down][second_side].update = False
 
     def handle_water(self, x, y, cell, dirs, checks):
@@ -205,32 +152,38 @@ class Grid:
     
     def show(self, hue, extra=0):
         grid = ""
-        r, g, b = hsv_to_rgb(hue/360,1,1)
-        r = round(r*255)
-        g = round(g*255)
-        b = round(b*255)
+        pointer_r, pointer_g, pointer_b = hsv_to_rgb(hue/360,1,1)
+        pointer_r = round(pointer_r*255)
+        pointer_g = round(pointer_g*255)
+        pointer_b = round(pointer_b*255)
+
         for row in self.matrix:
             for element in row:
+                sand_r, sand_g, sand_b = hsv_to_rgb(38/360, 0.36, 0.8 + element.sand_color)
+                sand_r = round(sand_r*255)
+                sand_g = round(sand_g*255)
+                sand_b = round(sand_b*255)
+
                 on_pointer = (element.row == self.pointer_y and element.col == self.pointer_x)
                 if on_pointer and self.show_pointer:
                     if element.state == 0:
-                        grid += color("◌", (r, g, b))
+                        grid += color("◌", (pointer_r, pointer_g, pointer_b))
                         # grid += "◌"
                     elif element.state == 1:
-                        grid += color("○", (r, g, b))
+                        grid += color("○", (pointer_r, pointer_g, pointer_b))
                         # grid += "○"
                     elif element.state == 2:
-                        grid += color("●", (r, g, b))
+                        grid += color("●", (pointer_r, pointer_g, pointer_b))
                         # grid += "●"
                     elif element.state == 3:
-                        grid += color("◉", (r, g, b))
+                        grid += color("◉", (pointer_r, pointer_g, pointer_b))
                         # grid += "◉"
                 else:
                     if element.state == 0:
                         grid += color("∙", (10, 10, 10))
                         # grid += "∙"
                     elif element.state == 1:
-                        grid += color("▩", (224, 195, 144))
+                        grid += color("▩", (sand_r, sand_g, sand_b))
                         # grid += "▩"
                     elif element.state == 2:
                         grid += color("■", (52, 128, 235))
@@ -244,7 +197,7 @@ class Grid:
         print(grid, end="", flush=True)
         print("= "*self.length, flush=True)
         if extra:
-            print(extra)
+            print(extra, flush=True)
 
 
 def handle_framerate(key, framerate): 
@@ -273,12 +226,13 @@ def get_keypress():
 
 def main():
 
-    L, B = 20, 20 # length and height of the grid [default: 20x20]
+    L, B = 30, 30 # length and height of the grid [default: 30x30]
     FRAMERATE = 50 # decrease if experiencing stutter [default: 50]
     MIN_BRUSH_SIZE = 0
     MAX_BRUSH_SIZE = 5
     DEFAULT_BRUSH_SIZE = 1
     HUE = 0
+    FRAMENUM = 0
     HUE_CHANGE = 1
 
     elements = {0: "Air", 1: "Sand", 2: "Water", 3: "Sandstone"}
@@ -309,6 +263,7 @@ def main():
 
         grid.show(hue=HUE, extra=f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}] \nBrush: <{grid.brush_size}px> [{elements[grid.brush_type]}] \nFrame Rate: [{FRAMERATE}]")
         HUE += HUE_CHANGE
+        FRAMENUM += 1
         sleep(1/FRAMERATE)
 
 
