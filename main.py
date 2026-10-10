@@ -24,6 +24,7 @@ class Grid:
         self.max_brush_size = max_brush_size
         self.brush_size = default_brush_size
         self.brush_type = 1
+        self.orientation = "up"
 
         self.matrix = [[Cell(row=row, col=col) for col in range(length)]
                        for row in range(height)]
@@ -36,86 +37,148 @@ class Grid:
         for x in range(0, self.length):
             for y in range(0, self.height):
                 self.matrix[y][x].update = True
-    
+
+    def up(self, cell, n: int = 1):
+        top = self.orientation
+        x = cell.col
+        y = cell.row
+        if top == "up":
+            if y - n >= 0:
+                return self.matrix[y - n][x]
+        elif top == "down":
+            if y + n < self.height:
+                return self.matrix[y + n][x]
+        elif top == "left":
+            if x - n >= 0:
+                return self.matrix[y][x - n]
+        elif top == "right":
+            if x + n < self.length:
+                return self.matrix[y][x + n]
+        else:
+            return False
+
+    def down(self, cell, n: int = 1):
+        top = self.orientation
+        x = cell.col
+        y = cell.row
+        if top == "up":
+            if y + n < self.height:
+                return self.matrix[y + n][x]
+        elif top == "down":
+            if y - n >= 0:
+                return self.matrix[y - n][x]
+        elif top == "left":
+            if x + n < self.length:
+                return self.matrix[y][x + n]
+        elif top == "right":
+            if x - n >= 0:
+                return self.matrix[y][x - n]
+        else:
+            return False
+
+    def left(self, cell, n: int = 1):
+        top = self.orientation
+        x = cell.col
+        y = cell.row
+        if top == "up":
+            if x - n >= 0:
+                return self.matrix[y][x - n]
+        elif top == "down":
+            if x + n < self.length:
+                return self.matrix[y][x + n]
+        elif top == "left":
+            if y + n < self.height:
+                return self.matrix[y + n][x]
+        elif top == "right":
+            if y - n >= 0:
+                return self.matrix[y - n][x]
+        else:
+            return False
+
+    def right(self, cell, n: int = 1):
+        top = self.orientation
+        x = cell.col
+        y = cell.row
+        if top == "up":
+            if x + n < self.length:
+                return self.matrix[y][x + n]
+        elif top == "down":
+            if x - n >= 0:
+                return self.matrix[y][x - n]
+        elif top == "left":
+            if y - n >= 0:
+                return self.matrix[y - n][x]
+        elif top == "right":
+            if y + n < self.height:
+                return self.matrix[y + n][x]
+        else:
+            return False
+            
     def update(self):
         for x in range(0, self.length):
             for y in range(self.height-1, -1, -1):
 
                 cell = self.matrix[y][x] # scans left to right, bottom to top
-                up = y - 1
-                down = y + 1
-                left = x - 1
-                right = x + 1
-                can_up = 0 <= up < self.height
-                can_down = 0 <= down < self.height
-                can_left = 0 <= left < self.length
-                can_right = 0 <= right < self.length
-                if random.choice([0,1]):
-                    first_side = left
-                    first_check = can_left
-                    second_side = right
-                    second_check = can_right
-                else:
-                    first_side = right
-                    first_check = can_right
-                    second_side = left
-                    second_check = can_left
 
-                # this makes things order specific which can be bad but it's the most convenient way
-                dirs = (up, down, left, right, first_side, second_side)
-                checks = (can_up, can_down, can_left, can_right, first_check, second_check)
-
-                self.handle_sand(x, y, cell, dirs, checks)
-                self.handle_water(x, y, cell, dirs, checks)
+                if cell.state == 1:
+                    self.handle_sand(cell)
+                elif cell.state == 2:
+                    self.handle_water(cell)
                 
                 # sleep(1)
 
-    def handle_sand(self, x, y, cell, dirs, checks):
-        up, down, left, right, first_side, second_side = dirs
-        can_up, can_down, can_left, can_right, first_check, second_check = checks
-        if cell.state == 1:
+    def handle_sand(self, cell: Cell):
+        if random.randint(0,1):
+            first = self.left(cell=cell)
+            second = self.right(cell=cell)
+        else:
+            first = self.right(cell=cell)
+            second = self.left(cell=cell)
 
-            # for normal gravity 
-            if can_down and self.matrix[down][x].state == 0:
-                self.swap(self.matrix[y][x], self.matrix[down][x])
-            elif cell.update and can_down and first_check and self.matrix[down][first_side].state == 0:
-                self.swap(self.matrix[y][x], self.matrix[down][first_side])
-                self.matrix[down][first_side].update = False
-            elif cell.update and can_down and second_check and self.matrix[down][second_side].state == 0:
-                self.swap(self.matrix[y][x], self.matrix[down][second_side])
-                self.matrix[down][second_side].update = False
+        # for normal gravity 
+        if self.down(cell=cell) and self.down(cell=cell).state == 0:
+            self.swap(cell, self.down(cell=cell))
+            self.down(cell=cell).update = False # potentially breaking
+        elif cell.update and self.down(cell=cell) and first and self.down(cell=first).state == 0:
+            self.swap(cell, self.down(cell=first))
+            self.down(cell=first).update = False
+        elif cell.update and self.down(cell=cell) and second and self.down(cell=second).state == 0:
+            self.swap(cell, self.down(cell=second))
+            self.down(cell=second).update = False
 
-            # for swapping with water (density swap)
-            elif can_down and self.matrix[down][x].state == 2:
-                self.swap(self.matrix[y][x], self.matrix[down][x])
-            elif cell.update and can_down and first_check and self.matrix[down][first_side].state == 2:
-                self.swap(self.matrix[y][x], self.matrix[down][first_side])
-                self.matrix[down][first_side].update = False
-            elif cell.update and can_down and second_check and self.matrix[down][second_side].state == 2:
-                self.swap(self.matrix[y][x], self.matrix[down][second_side])
-                self.matrix[down][second_side].update = False
+        # for swapping with water (density swap)
+        elif self.down(cell=cell) and self.down(cell=cell).state == 2:
+            self.swap(cell, self.down(cell=cell))
+            self.down(cell=cell).update = False # potentially breaking
+        elif cell.update and self.down(cell=cell) and first and self.down(cell=first).state == 2:
+            self.swap(cell, self.down(cell=first))
+            self.down(cell=first).update = False
+        elif cell.update and self.down(cell=cell) and second and self.down(cell=second).state == 2:
+            self.swap(cell, self.down(cell=second))
+            self.down(cell=second).update = False
 
-    def handle_water(self, x, y, cell, dirs, checks):
-        up, down, left, right, first_side, second_side = dirs
-        can_up, can_down, can_left, can_right, first_check, second_check = checks
-        if cell.state == 2:
+    def handle_water(self, cell):
+        if random.randint(0,1):
+            first = self.left(cell=cell)
+            second = self.right(cell=cell)
+        else:
+            first = self.right(cell=cell)
+            second = self.left(cell=cell)
 
-            # for normal gravity 
-            if can_down and self.matrix[down][x].state == 0:
-                self.matrix[y][x].state = 0
-                self.matrix[down][x].state = 2
-            elif cell.update and first_check and self.matrix[y][first_side].state == 0:
-                self.matrix[y][x].state = 0
-                self.matrix[y][first_side].state = 2
-                self.matrix[y][first_side].update = False
-            elif cell.update and second_check and self.matrix[y][second_side].state == 0:
-                self.matrix[y][x].state = 0
-                self.matrix[y][second_side].state = 2
-                self.matrix[y][second_side].update = False
+        # for normal gravity 
+        if self.down(cell=cell) and self.down(cell=cell).state == 0:
+            self.swap(cell, self.down(cell=cell))
+            self.down(cell=cell).update = False # potentially breaking
+        elif cell.update and first and first.state == 0:
+            self.swap(cell, first)
+            first.update = False
+        elif cell.update and second and second.state == 0:
+            self.swap(cell, second)
+            second.update = False
 
-            # plan to add better behaviour:
-            # find to which side, left or right, does more empty cells exist
-            # then move to that side
+        # plan to add better behaviour:
+        # find to which side, left or right, does more empty cells exist
+        # then move to that side
             
     def handle_pointer(self, key):
         if key == "w":
@@ -155,10 +218,6 @@ class Grid:
 
         for row in self.matrix:
             for element in row:
-                # sand_r, sand_g, sand_b = hsv_to_rgb(38/360, 0.36, 0.8 + element.sand_color)
-                # sand_r = round(sand_r*255)
-                # sand_g = round(sand_g*255)
-                # sand_b = round(sand_b*255)
 
                 on_pointer = (element.row == self.pointer_y and element.col == self.pointer_x)
                 if on_pointer and self.show_pointer:
