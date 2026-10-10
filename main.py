@@ -10,7 +10,7 @@ class Cell:
         self.row = row
         self.col = col
         self.update = True
-        self.sand_color = (random.randint(-1, 2))/10
+        self.sand_color = random.randint(-10, 20)
 
 class Grid:
     
@@ -152,44 +152,40 @@ class Grid:
     
     def show(self, hue, extra=0):
         grid = ""
-        pointer_r, pointer_g, pointer_b = hsv_to_rgb(hue/360,1,1)
-        pointer_r = round(pointer_r*255)
-        pointer_g = round(pointer_g*255)
-        pointer_b = round(pointer_b*255)
 
         for row in self.matrix:
             for element in row:
-                sand_r, sand_g, sand_b = hsv_to_rgb(38/360, 0.36, 0.8 + element.sand_color)
-                sand_r = round(sand_r*255)
-                sand_g = round(sand_g*255)
-                sand_b = round(sand_b*255)
+                # sand_r, sand_g, sand_b = hsv_to_rgb(38/360, 0.36, 0.8 + element.sand_color)
+                # sand_r = round(sand_r*255)
+                # sand_g = round(sand_g*255)
+                # sand_b = round(sand_b*255)
 
                 on_pointer = (element.row == self.pointer_y and element.col == self.pointer_x)
                 if on_pointer and self.show_pointer:
                     if element.state == 0:
-                        grid += color("◌", (pointer_r, pointer_g, pointer_b))
+                        grid += color("◌", hsv=(hue, 100, 100))
                         # grid += "◌"
                     elif element.state == 1:
-                        grid += color("○", (pointer_r, pointer_g, pointer_b))
+                        grid += color("○", hsv=(hue, 100, 100))
                         # grid += "○"
                     elif element.state == 2:
-                        grid += color("●", (pointer_r, pointer_g, pointer_b))
+                        grid += color("●", hsv=(hue, 100, 100))
                         # grid += "●"
                     elif element.state == 3:
-                        grid += color("◉", (pointer_r, pointer_g, pointer_b))
+                        grid += color("◉", hsv=(hue, 100, 100))
                         # grid += "◉"
                 else:
                     if element.state == 0:
-                        grid += color("∙", (10, 10, 10))
+                        grid += color("∙", rgb=(10, 10, 10))
                         # grid += "∙"
                     elif element.state == 1:
-                        grid += color("▩", (sand_r, sand_g, sand_b))
+                        grid += color("▩", hsv=(38, 36, 80 + element.sand_color))
                         # grid += "▩"
                     elif element.state == 2:
-                        grid += color("■", (52, 128, 235))
+                        grid += color("■", rgb=(52, 128, 235))
                         # grid += "■"
                     elif element.state == 3:
-                        grid += color("◙", (66, 35, 10))
+                        grid += color("◙", rgb=(66, 35, 10))
                         # grid += "◙"
                 grid += " "
             grid += "\n"
@@ -208,8 +204,18 @@ def handle_framerate(key, framerate):
     else:
         return framerate
 
-def color(str: str, rgb: tuple):
-    r, g, b = rgb
+def color(str: str, hsv: tuple = None, rgb: tuple = None):
+    '''Provide a str, and a RGB or HSV tuple to add that color to the str. 
+    RGB: 0-255 values for R, G & B color channels.
+    HSV: hue (0-360), saturation & value (0-100).'''
+    if rgb:
+        r, g, b = rgb
+    else:
+        h, s, v = hsv
+        r, g, b = hsv_to_rgb(h/360, s/100, v/100)
+        r = round(r*255)
+        g = round(g*255)
+        b = round(b*255)
     return f"\033[38;2;{r};{g};{b}m{str}\033[0m"
 
 def get_keypress():
