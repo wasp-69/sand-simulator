@@ -115,8 +115,17 @@ class Grid:
             return False
             
     def update(self):
-        for x in range(0, self.length):
-            for y in range(self.height-1, -1, -1):
+        if self.orientation == "up":
+            matrixrange = (range(0, self.length), range(self.height-1, -1, -1))
+        elif self.orientation == "down":
+            matrixrange = (range(0, self.length), range(0, self.height))
+        elif self.orientation == "left":
+            matrixrange = (range(self.length-1 , -1, -1), range(0, self.height))
+        elif self.orientation == "right":
+                    matrixrange = (range(0, self.length), range(0, self.height))
+
+        for x in matrixrange[0]:
+            for y in matrixrange[1]:
 
                 cell = self.matrix[y][x] # scans left to right, bottom to top
 
@@ -138,7 +147,6 @@ class Grid:
         # for normal gravity 
         if self.down(cell=cell) and self.down(cell=cell).state == 0:
             self.swap(cell, self.down(cell=cell))
-            self.down(cell=cell).update = False # potentially breaking
         elif cell.update and self.down(cell=cell) and first and self.down(cell=first).state == 0:
             self.swap(cell, self.down(cell=first))
             self.down(cell=first).update = False
@@ -149,7 +157,6 @@ class Grid:
         # for swapping with water (density swap)
         elif self.down(cell=cell) and self.down(cell=cell).state == 2:
             self.swap(cell, self.down(cell=cell))
-            self.down(cell=cell).update = False # potentially breaking
         elif cell.update and self.down(cell=cell) and first and self.down(cell=first).state == 2:
             self.swap(cell, self.down(cell=first))
             self.down(cell=first).update = False
@@ -212,6 +219,16 @@ class Grid:
             self.brush_type = (self.brush_type - 1) % len(elements)
         if key == "e":
             self.brush_type = (self.brush_type + 1) % len(elements)
+
+    def handle_orientation(self, key):
+        if key == "UP":
+            self.orientation = "down"
+        elif key == "DOWN":
+            self.orientation = "up"
+        elif key == "LEFT":
+            self.orientation = "right"
+        elif key == "RIGHT":
+            self.orientation = "left"
     
     def show(self, hue, extra=0):
         grid = ""
@@ -301,9 +318,12 @@ def main():
     HUE_CHANGE = 1
 
     elements = {0: "Air", 1: "Sand", 2: "Water", 3: "Sandstone"}
+    gravity_set = {"up": "↧", "down": "↥", "left": "↦", "right": "↤"}
 
     grid = Grid(L,B, max_brush_size=MAX_BRUSH_SIZE, min_brush_size=MIN_BRUSH_SIZE, default_brush_size=DEFAULT_BRUSH_SIZE)
-    grid.show(hue=HUE, extra=f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}] \nBrush: <{grid.brush_size}px> [{elements[grid.brush_type]}] \nFrame Rate: [{(FRAMERATE):.0f}]")
+    grid.show(hue=HUE, extra=f"""Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}] 
+Brush: <{grid.brush_size}px> [{elements[grid.brush_type]}] 
+Frame Rate: [{(FRAMERATE):.0f}]""")
 
 
     while True:
@@ -315,6 +335,7 @@ def main():
         grid.handle_action(pressed_key)
         grid.handle_brush_size(pressed_key)
         grid.handle_brush_type(pressed_key, elements)
+        grid.handle_orientation(pressed_key)
 
         FRAMERATE = handle_framerate(pressed_key, FRAMERATE)
 
@@ -326,7 +347,10 @@ def main():
         if pressed_key == "`":
             HUE_CHANGE = 1 - HUE_CHANGE
 
-        grid.show(hue=HUE, extra=f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}] \nBrush: <{grid.brush_size}px> [{elements[grid.brush_type]}] \nFrame Rate: [{FRAMERATE}]")
+        grid.show(hue=HUE, extra=f"""Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}] 
+Brush: <{grid.brush_size}px> [{elements[grid.brush_type]}] 
+Frame Rate: [{FRAMERATE}]
+Gravity: [ {gravity_set[grid.orientation]} ]""")
         HUE += HUE_CHANGE
         FRAMENUM += 1
         sleep(1/FRAMERATE)
