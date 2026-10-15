@@ -3,6 +3,8 @@ import random
 from time import sleep
 from colorsys import hsv_to_rgb
 
+DYNAMIC_LIGHTING = True
+
 class Cell:
 
     def __init__(self, row, col, state=0):
@@ -38,8 +40,11 @@ class Grid:
             for y in range(0, self.height):
                 self.matrix[y][x].update = True
 
-    def up(self, cell, n: int = 1):
-        top = self.orientation
+    def up(self, cell, n: int = 1, static = False):
+        if static:
+            top = "up"
+        else:
+            top = self.orientation
         x = cell.col
         y = cell.row
         if top == "up":
@@ -57,8 +62,11 @@ class Grid:
         else:
             return False
 
-    def down(self, cell, n: int = 1):
-        top = self.orientation
+    def down(self, cell, n: int = 1, static = False):
+        if static:
+            top = "down"
+        else:
+            top = self.orientation
         x = cell.col
         y = cell.row
         if top == "up":
@@ -76,8 +84,11 @@ class Grid:
         else:
             return False
 
-    def left(self, cell, n: int = 1):
-        top = self.orientation
+    def left(self, cell, n: int = 1, static = False):
+        if static:
+            top = "left"
+        else:
+            top = self.orientation
         x = cell.col
         y = cell.row
         if top == "up":
@@ -95,8 +106,11 @@ class Grid:
         else:
             return False
 
-    def right(self, cell, n: int = 1):
-        top = self.orientation
+    def right(self, cell, n: int = 1, static = False):
+        if static:
+            top = "right"
+        else:
+            top = self.orientation
         x = cell.col
         y = cell.row
         if top == "up":
@@ -229,6 +243,24 @@ class Grid:
             self.orientation = "right"
         elif key == "RIGHT":
             self.orientation = "left"
+
+    def color_depth_variance(self, cell, hsv: tuple):
+        global DYNAMIC_LIGHTING 
+        if not DYNAMIC_LIGHTING:
+            return hsv
+        
+        h, s, v = hsv
+
+        for i in range(1, 16):
+            if self.up(cell, i, True):
+
+                if self.up(cell, i, True).state == 2:
+                    v -= 5
+                elif self.up(cell, i, True).state in (1,3):
+                    v -= 7
+
+        return (h, s, max(30 , v))
+                
     
     def show(self, hue, extra=0):
         grid = ""
@@ -252,13 +284,13 @@ class Grid:
                         # grid += "◉"
                 else:
                     if element.state == 0:
-                        grid += color("∙", rgb=(10, 10, 10))
+                        grid += color("∙", rgb=(15, 15, 15))
                         # grid += "∙"
                     elif element.state == 1:
-                        grid += color("▩", hsv=(38, 36, 80 + element.sand_color))
+                        grid += color("▩", hsv=self.color_depth_variance(element, (38, 36, 80 + element.sand_color)))
                         # grid += "▩"
                     elif element.state == 2:
-                        grid += color("■", rgb=(52, 128, 235))
+                        grid += color("■", hsv=self.color_depth_variance(element, hsv=(215, 78, 100)))
                         # grid += "■"
                     elif element.state == 3:
                         grid += color("◙", rgb=(66, 35, 10))
