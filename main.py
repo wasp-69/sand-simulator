@@ -147,7 +147,11 @@ class Grid:
                     self.handle_sand(cell)
                 elif cell.state == 2:
                     self.handle_water(cell)
-                
+                elif cell.state == 4:
+                    self.handle_acid(cell)
+                elif cell.state == 5:
+                    self.handle_steam(cell)
+
                 # sleep(1)
 
     def handle_sand(self, cell: Cell):
@@ -201,6 +205,82 @@ class Grid:
         # find to which side, left or right, does more empty cells exist
         # then move to that side
             
+    def handle_acid(self, cell): # pending
+        if random.randint(0,1):
+            first = self.left(cell=cell)
+            second = self.right(cell=cell)
+        else:
+            first = self.right(cell=cell)
+            second = self.left(cell=cell)
+
+        # for normal gravity 
+        if self.down(cell=cell) and self.down(cell=cell).state == 0:
+            self.swap(cell, self.down(cell=cell))
+            self.down(cell=cell).update = False # potentially breaking
+        elif cell.update and first and first.state == 0:
+            self.swap(cell, first)
+            first.update = False
+        elif cell.update and second and second.state == 0:
+            self.swap(cell, second)
+            second.update = False
+
+        # for acid dissoulution
+        if self.down(cell) and self.down(cell).state == 1:
+            cell.state = 0
+            self.down(cell).state = 0
+        elif self.up(cell) and self.up(cell).state == 1:
+            cell.state = 0
+            self.up(cell).state = 0
+        elif first and first.state == 1:
+            cell.state = 0
+            first.state = 0
+        elif second and second.state == 1:
+            cell.state = 0
+            second.state = 0
+
+        elif self.down(cell) and self.down(cell).state == 2:
+            cell.state = 0
+            self.down(cell).state = 5
+        elif self.up(cell) and self.up(cell).state == 2:
+            cell.state = 0
+            self.up(cell).state = 5
+        elif first and first.state == 2:
+            cell.state = 0
+            first.state = 5
+        elif second and second.state == 2:
+            cell.state = 0
+            second.state = 5
+
+    def handle_steam(self, cell):
+        if random.randint(0,1):
+            first = self.left(cell=cell)
+            second = self.right(cell=cell)
+        else:
+            first = self.right(cell=cell)
+            second = self.left(cell=cell)
+
+        # condensation
+        if cell.row == 0 and random.random() < 0.01:
+            cell.state = 2
+            return
+
+        # normal gravity
+        if self.up(cell=cell) and cell.update and self.up(cell=cell).state in (0, 1, 2, 4):
+            self.swap(cell, self.up(cell=cell))
+            self.up(cell=cell).update = False # potentially breaking
+        elif cell.update and self.up(cell=cell) and first and self.up(cell=first).state in (0, 1, 2, 4):
+            self.swap(cell, self.up(cell=first))
+            self.up(cell=first).update = False
+        elif cell.update and self.up(cell=cell) and second and self.up(cell=second).state in (0, 1, 2, 4):
+            self.swap(cell, self.up(cell=second))
+            self.up(cell=second).update = False
+        elif cell.update and first and first.state == 0:
+            self.swap(cell, first)
+            first.update = False
+        elif cell.update and second and second.state == 0:
+            self.swap(cell, second)
+            second.update = False
+
     def handle_pointer(self, key):
         if key == "w":
             self.pointer_y = (self.pointer_y - 1) % self.height
@@ -254,14 +334,13 @@ class Grid:
         for i in range(1, 16):
             if self.up(cell, i, True):
 
-                if self.up(cell, i, True).state == 2:
+                if self.up(cell, i, True).state in (2, 4):
                     v -= 5
-                elif self.up(cell, i, True).state in (1,3):
+                elif self.up(cell, i, True).state in (1, 3):
                     v -= 7
 
-        return (h, s, max(30 , v))
+        return (h, s, max(20 , v))
                 
-    
     def show(self, hue, extra=0):
         grid = ""
 
@@ -273,10 +352,10 @@ class Grid:
                     if element.state == 0:
                         grid += color("◌", hsv=(hue, 100, 100))
                         # grid += "◌"
-                    elif element.state == 1:
+                    elif element.state in (1, 5):
                         grid += color("○", hsv=(hue, 100, 100))
                         # grid += "○"
-                    elif element.state == 2:
+                    elif element.state in (2, 4):
                         grid += color("●", hsv=(hue, 100, 100))
                         # grid += "●"
                     elif element.state == 3:
@@ -290,11 +369,17 @@ class Grid:
                         grid += color("▩", hsv=self.color_depth_variance(element, (38, 36, 80 + element.sand_color)))
                         # grid += "▩"
                     elif element.state == 2:
-                        grid += color("■", hsv=self.color_depth_variance(element, hsv=(215, 78, 100)))
+                        grid += color("■", hsv=self.color_depth_variance(element, (215, 78, 100)))
                         # grid += "■"
                     elif element.state == 3:
-                        grid += color("◙", rgb=(66, 35, 10))
+                        grid += color("◙", hsv=self.color_depth_variance(element, (0, 0, 54)))
                         # grid += "◙"
+                    elif element.state == 4:
+                        grid += color("■", hsv=self.color_depth_variance(element, (80, 100, 100)))
+                        # grid += "■"
+                    elif element.state == 5:
+                        grid += color("▩", hsv=self.color_depth_variance(element, (80, 2, 40 + 1.5*(element.sand_color))))
+                        # grid += "▩"
                 grid += " "
             grid += "\n"
         print("\033[2J\033[H", end="", flush=True)
@@ -349,13 +434,14 @@ def main():
     FRAMENUM = 0
     HUE_CHANGE = 1
 
-    elements = {0: "Air", 1: "Sand", 2: "Water", 3: "Sandstone"}
+    elements = {0: "Air", 1: "Sand", 2: "Water", 3: "Steel", 4: "Acid", 5: "Steam"}
     gravity_set = {"up": "↧", "down": "↥", "left": "↦", "right": "↤"}
 
     grid = Grid(L,B, max_brush_size=MAX_BRUSH_SIZE, min_brush_size=MIN_BRUSH_SIZE, default_brush_size=DEFAULT_BRUSH_SIZE)
     grid.show(hue=HUE, extra=f"""Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}] 
 Brush: <{grid.brush_size}px> [{elements[grid.brush_type]}] 
-Frame Rate: [{(FRAMERATE):.0f}]""")
+Frame Rate: [{(FRAMERATE):.0f}]
+Gravity: [ {gravity_set[grid.orientation]} ]""")
 
 
     while True:
