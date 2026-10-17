@@ -3,7 +3,6 @@ import random
 from time import sleep
 from colorsys import hsv_to_rgb
 
-DYNAMIC_LIGHTING = True
 
 class Cell:
 
@@ -64,7 +63,7 @@ class Grid:
 
     def down(self, cell, n: int = 1, static = False):
         if static:
-            top = "down"
+            top = "up"
         else:
             top = self.orientation
         x = cell.col
@@ -86,7 +85,7 @@ class Grid:
 
     def left(self, cell, n: int = 1, static = False):
         if static:
-            top = "left"
+            top = "up"
         else:
             top = self.orientation
         x = cell.col
@@ -108,7 +107,7 @@ class Grid:
 
     def right(self, cell, n: int = 1, static = False):
         if static:
-            top = "right"
+            top = "up"
         else:
             top = self.orientation
         x = cell.col
@@ -136,12 +135,12 @@ class Grid:
         elif self.orientation == "left":
             matrixrange = (range(self.length-1 , -1, -1), range(0, self.height))
         elif self.orientation == "right":
-                    matrixrange = (range(0, self.length), range(0, self.height))
+            matrixrange = (range(0, self.length), range(0, self.height))
 
         for x in matrixrange[0]:
             for y in matrixrange[1]:
 
-                cell = self.matrix[y][x] # scans left to right, bottom to top
+                cell = self.matrix[y][x] 
 
                 if cell.state == 1:
                     self.handle_sand(cell)
@@ -213,18 +212,8 @@ class Grid:
             first = self.right(cell=cell)
             second = self.left(cell=cell)
 
-        # for normal gravity 
-        if self.down(cell=cell) and self.down(cell=cell).state == 0:
-            self.swap(cell, self.down(cell=cell))
-            self.down(cell=cell).update = False # potentially breaking
-        elif cell.update and first and first.state == 0:
-            self.swap(cell, first)
-            first.update = False
-        elif cell.update and second and second.state == 0:
-            self.swap(cell, second)
-            second.update = False
-
         # for acid dissoulution
+            # for sand
         if self.down(cell) and self.down(cell).state == 1:
             cell.state = 0
             self.down(cell).state = 0
@@ -237,7 +226,7 @@ class Grid:
         elif second and second.state == 1:
             cell.state = 0
             second.state = 0
-
+            # for water
         elif self.down(cell) and self.down(cell).state == 2:
             cell.state = 0
             self.down(cell).state = 5
@@ -251,6 +240,17 @@ class Grid:
             cell.state = 0
             second.state = 5
 
+        # for normal gravity 
+        if self.down(cell=cell) and self.down(cell=cell).state == 0:
+            self.swap(cell, self.down(cell=cell))
+            self.down(cell=cell).update = False # potentially breaking
+        elif cell.update and first and first.state == 0:
+            self.swap(cell, first)
+            first.update = False
+        elif cell.update and second and second.state == 0:
+            self.swap(cell, second)
+            second.update = False
+
     def handle_steam(self, cell):
         if random.randint(0,1):
             first = self.left(cell=cell)
@@ -260,9 +260,10 @@ class Grid:
             second = self.left(cell=cell)
 
         # condensation
-        if cell.row == 0 and random.random() < 0.01:
-            cell.state = 2
-            return
+        if cell.row == 0 or (self.up(cell) and self.up(cell).state == 3):
+            if random.random() < 0.01:
+                cell.state = 2
+                return
 
         # normal gravity
         if self.up(cell=cell) and cell.update and self.up(cell=cell).state in (0, 1, 2, 4):
@@ -324,6 +325,11 @@ class Grid:
         elif key == "RIGHT":
             self.orientation = "left"
 
+    def handle_clear(self, key):
+        if key == "C":
+            self.matrix = [[Cell(row=row, col=col) for col in range(self.length)]
+                       for row in range(self.height)]
+
     def color_depth_variance(self, cell, hsv: tuple):
         global DYNAMIC_LIGHTING 
         if not DYNAMIC_LIGHTING:
@@ -382,12 +388,26 @@ class Grid:
                         # grid += "▩"
                 grid += " "
             grid += "\n"
-        print("\033[2J\033[H", end="", flush=True)
-        print(grid, end="", flush=True)
-        print("= "*self.length, flush=True)
+        # sys.stdout.write("\033[H")
+        # print(grid, end="", flush=True)
+        sys.stdout.write(grid)
+        # print("= "*self.length, flush=True)
+        sys.stdout.write("= "*self.length + "\n")
         if extra:
-            print(extra, flush=True)
+            # print(extra, flush=True)
+            sys.stdout.write(extra+"\n")
+        sys.stdout.flush()
 
+
+def handle_paused(key):
+    global PAUSED
+    if PAUSED == 2:
+        PAUSED -= 1
+    if PAUSED == 1:
+        if key == "\\":
+            PAUSED = 2
+    if key == "|":
+        PAUSED = 1 - PAUSED
 
 def handle_framerate(key, framerate): 
     if key == ".":
@@ -424,6 +444,7 @@ def get_keypress():
         return ch.decode('utf-8', errors='ignore')
 
 def main():
+    global FRAMENUM, DYNAMIC_LIGHTING, PAUSED
 
     L, B = 30, 30 # length and height of the grid [default: 30x30]
     FRAMERATE = 50 # decrease if experiencing stutter [default: 50]
@@ -433,27 +454,35 @@ def main():
     HUE = 0
     FRAMENUM = 0
     HUE_CHANGE = 1
+    DYNAMIC_LIGHTING = True
+    PAUSED = 0
 
     elements = {0: "Air", 1: "Sand", 2: "Water", 3: "Steel", 4: "Acid", 5: "Steam"}
     gravity_set = {"up": "↧", "down": "↥", "left": "↦", "right": "↤"}
+    pause_set = {0: "▢", 1: "▶", 2:"▶"}
 
+    sys.stdout.write("\033[?25l")
+    sys.stdout.write("\033[2K")
     grid = Grid(L,B, max_brush_size=MAX_BRUSH_SIZE, min_brush_size=MIN_BRUSH_SIZE, default_brush_size=DEFAULT_BRUSH_SIZE)
     grid.show(hue=HUE, extra=f"""Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}] 
 Brush: <{grid.brush_size}px> [{elements[grid.brush_type]}] 
 Frame Rate: [{(FRAMERATE):.0f}]
-Gravity: [ {gravity_set[grid.orientation]} ]""")
+Gravity: [ {gravity_set[grid.orientation]} ]
+Simulation: ( {pause_set[PAUSED]} )""")
 
-
+    # main loop 
     while True:
         pressed_key = get_keypress()
 
-        grid.update()
+        if PAUSED != 1:
+            grid.update()
         grid.reset_update_flags()
         grid.handle_pointer(pressed_key)
         grid.handle_action(pressed_key)
         grid.handle_brush_size(pressed_key)
         grid.handle_brush_type(pressed_key, elements)
         grid.handle_orientation(pressed_key)
+        grid.handle_clear(pressed_key)
 
         FRAMERATE = handle_framerate(pressed_key, FRAMERATE)
 
@@ -468,12 +497,16 @@ Gravity: [ {gravity_set[grid.orientation]} ]""")
         grid.show(hue=HUE, extra=f"""Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}] 
 Brush: <{grid.brush_size}px> [{elements[grid.brush_type]}] 
 Frame Rate: [{FRAMERATE}]
-Gravity: [ {gravity_set[grid.orientation]} ]""")
+Gravity: [ {gravity_set[grid.orientation]} ]
+Simulation: ( {pause_set[PAUSED]} )""")
         HUE += HUE_CHANGE
         FRAMENUM += 1
         sleep(1/FRAMERATE)
 
+        handle_paused(pressed_key)
+
 
 if __name__ == "__main__":
     main()
+    sys.stdout.write("\033[?25h")
 # master
