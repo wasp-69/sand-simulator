@@ -3,27 +3,33 @@ import random
 from time import sleep
 from colorsys import hsv_to_rgb
 
+# import json
+
 
 class Cell:
 
-    def __init__(self, row, col, state=0):
+    def __init__(self, row, col, state=0, sand_color=None):
         self.state = state
         self.row = row
         self.col = col
         self.update = True
-        self.sand_color = random.randint(-10, 20)
+        if sand_color:
+            self.sand_color = sand_color
+        else:
+            self.sand_color = random.randint(-10, 20)
 
 class Grid:
     
-    def __init__(self, length, height, min_brush_size=-1, max_brush_size=5, default_brush_size=1):
+    def __init__(self, length, height):
+        global DEFAULT_BRUSH_SIZE, MAX_BRUSH_SIZE, MIN_BRUSH_SIZE
         self.length = length
         self.height = height
         self.show_pointer = 1
         self.pointer_x = 0
         self.pointer_y = 0
-        self.min_brush_size = min_brush_size
-        self.max_brush_size = max_brush_size
-        self.brush_size = default_brush_size
+        self.min_brush_size = MIN_BRUSH_SIZE
+        self.max_brush_size = MAX_BRUSH_SIZE
+        self.brush_size = DEFAULT_BRUSH_SIZE
         self.brush_type = 1
         self.orientation = "up"
 
@@ -204,7 +210,7 @@ class Grid:
         # find to which side, left or right, does more empty cells exist
         # then move to that side
             
-    def handle_acid(self, cell): # pending
+    def handle_acid(self, cell):
         if random.randint(0,1):
             first = self.left(cell=cell)
             second = self.right(cell=cell)
@@ -346,11 +352,31 @@ class Grid:
                     v -= 7
 
         return (h, s, max(20 , v))
-                
+
+    def handle_paused(self, key): # WEEP WEEP WEEP, RELENTLESS EFFORTS IN VAIN
+        global PAUSED
+        if key == "\\":
+            PAUSED = not PAUSED
+        if key == "]":
+            self.record_undo()
+            self.update()
+        elif key == "[" and UNDO_LIST:
+            self.matrix = UNDO_LIST.pop()
+            if not PAUSED and UNDO_LIST:
+                self.matrix = UNDO_LIST.pop()
+
+
+    def record_undo(self):
+        global UNDO_LIST, MAX_UNDO
+        snapshot = [[Cell(row=c.row, col=c.col, state=c.state, sand_color=c.sand_color) for c in row]for row in self.matrix]
+        UNDO_LIST.append(snapshot)
+        if len(UNDO_LIST) > MAX_UNDO:
+            UNDO_LIST.pop(0)
+
     def show(self, hue, extra=0):
         grid = ""
 
-        for row in self.matrix:
+        for rownum, row in enumerate(self.matrix):
             for element in row:
 
                 on_pointer = (element.row == self.pointer_y and element.col == self.pointer_x)
@@ -387,27 +413,16 @@ class Grid:
                         grid += color("▩", hsv=self.color_depth_variance(element, (80, 2, 40 + 1.5*(element.sand_color))))
                         # grid += "▩"
                 grid += " "
+            if extra and rownum != 0 and rownum < len(extra) + 1:
+                grid += "               │   " + extra[rownum-1]
             grid += "\n"
-        # sys.stdout.write("\033[H")
-        # print(grid, end="", flush=True)
+        sys.stdout.write("\033[H")
         sys.stdout.write(grid)
-        # print("= "*self.length, flush=True)
-        sys.stdout.write("= "*self.length + "\n")
-        if extra:
-            # print(extra, flush=True)
-            sys.stdout.write(extra+"\n")
+        sys.stdout.write("═"*2*self.length + "\n")
+        # if extra:
+        #     sys.stdout.write(extra+"\n")
         sys.stdout.flush()
 
-
-def handle_paused(key):
-    global PAUSED
-    if PAUSED == 2:
-        PAUSED -= 1
-    if PAUSED == 1:
-        if key == "\\":
-            PAUSED = 2
-    if key == "|":
-        PAUSED = 1 - PAUSED
 
 def handle_framerate(key, framerate): 
     if key == ".":
@@ -444,7 +459,7 @@ def get_keypress():
         return ch.decode('utf-8', errors='ignore')
 
 def main():
-    global FRAMENUM, DYNAMIC_LIGHTING, PAUSED
+    global FRAMENUM, DYNAMIC_LIGHTING, PAUSED, UNDO_LIST, MAX_UNDO, MIN_BRUSH_SIZE, MAX_BRUSH_SIZE, DEFAULT_BRUSH_SIZE
 
     L, B = 30, 30 # length and height of the grid [default: 30x30]
     FRAMERATE = 50 # decrease if experiencing stutter [default: 50]
@@ -455,27 +470,31 @@ def main():
     FRAMENUM = 0
     HUE_CHANGE = 1
     DYNAMIC_LIGHTING = True
-    PAUSED = 0
+    PAUSED = False
+    MAX_UNDO = 10000 # the max cap of undo recordings, set this to low if experience performance issues [default: 1000]
+    UNDO_LIST = [Grid(L, B)] * MAX_UNDO
 
     elements = {0: "Air", 1: "Sand", 2: "Water", 3: "Steel", 4: "Acid", 5: "Steam"}
     gravity_set = {"up": "↧", "down": "↥", "left": "↦", "right": "↤"}
-    pause_set = {0: "▢", 1: "▶", 2:"▶"}
+    pause_set = {False: "▢", True: "▶"}
 
+    sys.stdout.write("\033[H\033[2J")
     sys.stdout.write("\033[?25l")
     sys.stdout.write("\033[2K")
-    grid = Grid(L,B, max_brush_size=MAX_BRUSH_SIZE, min_brush_size=MIN_BRUSH_SIZE, default_brush_size=DEFAULT_BRUSH_SIZE)
-    grid.show(hue=HUE, extra=f"""Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}] 
-Brush: <{grid.brush_size}px> [{elements[grid.brush_type]}] 
-Frame Rate: [{(FRAMERATE):.0f}]
-Gravity: [ {gravity_set[grid.orientation]} ]
-Simulation: ( {pause_set[PAUSED]} )""")
+    grid = Grid(L,B)
+    grid.show(hue=HUE, extra=[  f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}]",
+                                f"Brush: <{grid.brush_size}px> [{elements[grid.brush_type]}]", 
+                                f"Frame Rate: [{(FRAMERATE):.0f}]",
+                                f"Gravity: [ {gravity_set[grid.orientation]} ]",
+                                f"Simulation: ( {pause_set[PAUSED]} )"])
 
     # main loop 
     while True:
         pressed_key = get_keypress()
 
-        if PAUSED != 1:
+        if not PAUSED:
             grid.update()
+            grid.record_undo()
         grid.reset_update_flags()
         grid.handle_pointer(pressed_key)
         grid.handle_action(pressed_key)
@@ -483,7 +502,8 @@ Simulation: ( {pause_set[PAUSED]} )""")
         grid.handle_brush_type(pressed_key, elements)
         grid.handle_orientation(pressed_key)
         grid.handle_clear(pressed_key)
-
+        grid.handle_paused(pressed_key)
+        
         FRAMERATE = handle_framerate(pressed_key, FRAMERATE)
 
         if grid.brush_size == 0:
@@ -494,16 +514,14 @@ Simulation: ( {pause_set[PAUSED]} )""")
         if pressed_key == "`":
             HUE_CHANGE = 1 - HUE_CHANGE
 
-        grid.show(hue=HUE, extra=f"""Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}] 
-Brush: <{grid.brush_size}px> [{elements[grid.brush_type]}] 
-Frame Rate: [{FRAMERATE}]
-Gravity: [ {gravity_set[grid.orientation]} ]
-Simulation: ( {pause_set[PAUSED]} )""")
+        grid.show(hue=HUE, extra=[  f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}]   ",
+                                    f"Brush: <{grid.brush_size}px> [{elements[grid.brush_type]}]   ",
+                                    f"Frame Rate: [{FRAMERATE}]   ",
+                                    f"Gravity: [ {gravity_set[grid.orientation]} ]   ",
+                                    f"Simulation: ( {pause_set[PAUSED]} )   ",])
         HUE += HUE_CHANGE
         FRAMENUM += 1
         sleep(1/FRAMERATE)
-
-        handle_paused(pressed_key)
 
 
 if __name__ == "__main__":
