@@ -2,8 +2,7 @@ import sys
 import random
 from time import sleep
 from colorsys import hsv_to_rgb
-
-# import json
+import math
 
 
 class Cell:
@@ -13,10 +12,19 @@ class Cell:
         self.row = row
         self.col = col
         self.update = True
-        if sand_color:
-            self.sand_color = sand_color
-        else:
+        if sand_color is None:
             self.sand_color = random.randint(-10, 20)
+        else:
+            self.sand_color = sand_color
+
+    def get_sand_hue(self, height, length):
+        global RAINBOW_SAND, HUE
+        theta = math.radians(HUE)
+        if not RAINBOW_SAND:
+            return 38
+        else:
+            avg = average(math.sin(theta)*(self.row / height), math.cos(theta)*(self.col / length))
+            return (avg * 360 ) + HUE 
 
 class Grid:
     
@@ -266,7 +274,7 @@ class Grid:
             second = self.left(cell=cell)
 
         # condensation
-        if cell.row == 0 or (self.up(cell) and self.up(cell).state == 3):
+        if (self.up(cell) is None) or (self.up(cell) and self.up(cell).state == 3):
             if random.random() < 0.01:
                 cell.state = 2
                 return
@@ -353,18 +361,19 @@ class Grid:
 
         return (h, s, max(20 , v))
 
-    def handle_paused(self, key): # WEEP WEEP WEEP, RELENTLESS EFFORTS IN VAIN
+    def handle_paused(self, key):
         global PAUSED
         if key == "\\":
             PAUSED = not PAUSED
-        if key == "]":
-            self.record_undo()
-            self.update()
-        elif key == "[" and UNDO_LIST:
-            self.matrix = UNDO_LIST.pop()
-            if not PAUSED and UNDO_LIST:
-                self.matrix = UNDO_LIST.pop()
 
+        if PAUSED:
+            if key == "]":
+                self.record_undo()
+                self.update()
+            elif key == "[" and UNDO_LIST:
+                self.matrix = UNDO_LIST.pop()
+                if not PAUSED and UNDO_LIST:
+                    self.matrix = UNDO_LIST.pop()
 
     def record_undo(self):
         global UNDO_LIST, MAX_UNDO
@@ -373,7 +382,8 @@ class Grid:
         if len(UNDO_LIST) > MAX_UNDO:
             UNDO_LIST.pop(0)
 
-    def show(self, hue, extra=0):
+    def show(self, extra=0):
+        global HUE
         grid = ""
 
         for rownum, row in enumerate(self.matrix):
@@ -382,23 +392,23 @@ class Grid:
                 on_pointer = (element.row == self.pointer_y and element.col == self.pointer_x)
                 if on_pointer and self.show_pointer:
                     if element.state == 0:
-                        grid += color("◌", hsv=(hue, 100, 100))
+                        grid += color("◌", hsv=(HUE, 100, 100))
                         # grid += "◌"
                     elif element.state in (1, 5):
-                        grid += color("○", hsv=(hue, 100, 100))
+                        grid += color("○", hsv=(HUE, 100, 100))
                         # grid += "○"
                     elif element.state in (2, 4):
-                        grid += color("●", hsv=(hue, 100, 100))
+                        grid += color("●", hsv=(HUE, 100, 100))
                         # grid += "●"
                     elif element.state == 3:
-                        grid += color("◉", hsv=(hue, 100, 100))
+                        grid += color("◉", hsv=(HUE, 100, 100))
                         # grid += "◉"
                 else:
                     if element.state == 0:
                         grid += color("∙", rgb=(15, 15, 15))
                         # grid += "∙"
                     elif element.state == 1:
-                        grid += color("▩", hsv=self.color_depth_variance(element, (38, 36, 80 + element.sand_color)))
+                        grid += color("▩", hsv=self.color_depth_variance(element, (element.get_sand_hue(self.height, self.length), 36, 80 + element.sand_color)))
                         # grid += "▩"
                     elif element.state == 2:
                         grid += color("■", hsv=self.color_depth_variance(element, (215, 78, 100)))
@@ -424,13 +434,37 @@ class Grid:
         sys.stdout.flush()
 
 
-def handle_framerate(key, framerate): 
-    if key == ".":
-        return min(100, framerate + 1)
-    elif key == ",":
-        return max(1, framerate - 1)
+def average(*args):
+    s = 0
+    for num in args:
+        s += num
+    return s / len(args)
+
+def handle_RBS(key):
+    global RAINBOW_SAND, RBS_COUNTER
+    code = "Anmol"
+
+    if key is None:
+        return
+    
+    if key in code:
+        if code[RBS_COUNTER] == key:
+            RBS_COUNTER += 1
     else:
-        return framerate
+        RBS_COUNTER = 0
+
+    if RBS_COUNTER == len(code):
+        RAINBOW_SAND = not RAINBOW_SAND
+        RBS_COUNTER = 0
+
+def handle_framerate(key): 
+    global FRAMERATE, PAUSED
+
+    if not PAUSED:
+        if key == "]":
+            FRAMERATE = min(100, FRAMERATE + 1)
+        elif key == "[":
+            FRAMERATE = max(1, FRAMERATE - 1)
 
 def color(str: str, hsv: tuple = None, rgb: tuple = None):
     '''Provide a str, and a RGB or HSV tuple to add that color to the str. 
@@ -459,7 +493,10 @@ def get_keypress():
         return ch.decode('utf-8', errors='ignore')
 
 def main():
-    global FRAMENUM, DYNAMIC_LIGHTING, PAUSED, UNDO_LIST, MAX_UNDO, MIN_BRUSH_SIZE, MAX_BRUSH_SIZE, DEFAULT_BRUSH_SIZE
+    global FRAMENUM, FRAMERATE, DYNAMIC_LIGHTING, \
+        PAUSED, UNDO_LIST, MAX_UNDO, \
+        MIN_BRUSH_SIZE, MAX_BRUSH_SIZE, DEFAULT_BRUSH_SIZE, \
+        RAINBOW_SAND, HUE, RBS_COUNTER
 
     L, B = 30, 30 # length and height of the grid [default: 30x30]
     FRAMERATE = 50 # decrease if experiencing stutter [default: 50]
@@ -471,8 +508,12 @@ def main():
     HUE_CHANGE = 1
     DYNAMIC_LIGHTING = True
     PAUSED = False
+    RAINBOW_SAND = False
+    RBS_COUNTER = 0
     MAX_UNDO = 10000 # the max cap of undo recordings, set this to low if experience performance issues [default: 1000]
-    UNDO_LIST = [Grid(L, B)] * MAX_UNDO
+    UNDO_LIST = [Grid(L, B).matrix] * MAX_UNDO
+
+    # last_key = None
 
     elements = {0: "Air", 1: "Sand", 2: "Water", 3: "Steel", 4: "Acid", 5: "Steam"}
     gravity_set = {"up": "↧", "down": "↥", "left": "↦", "right": "↤"}
@@ -482,7 +523,7 @@ def main():
     sys.stdout.write("\033[?25l")
     sys.stdout.write("\033[2K")
     grid = Grid(L,B)
-    grid.show(hue=HUE, extra=[  f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}]",
+    grid.show(extra=[  f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}]",
                                 f"Brush: <{grid.brush_size}px> [{elements[grid.brush_type]}]", 
                                 f"Frame Rate: [{(FRAMERATE):.0f}]",
                                 f"Gravity: [ {gravity_set[grid.orientation]} ]",
@@ -503,8 +544,9 @@ def main():
         grid.handle_orientation(pressed_key)
         grid.handle_clear(pressed_key)
         grid.handle_paused(pressed_key)
-        
-        FRAMERATE = handle_framerate(pressed_key, FRAMERATE)
+
+        handle_RBS(pressed_key)
+        handle_framerate(pressed_key)
 
         if grid.brush_size == 0:
             grid.show_pointer = 0
@@ -514,11 +556,17 @@ def main():
         if pressed_key == "`":
             HUE_CHANGE = 1 - HUE_CHANGE
 
-        grid.show(hue=HUE, extra=[  f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}]   ",
+        # if pressed_key is None:
+        #     pass
+        # else:
+        #     last_key = pressed_key
+
+        grid.show(extra=[  f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}]   ",
                                     f"Brush: <{grid.brush_size}px> [{elements[grid.brush_type]}]   ",
                                     f"Frame Rate: [{FRAMERATE}]   ",
                                     f"Gravity: [ {gravity_set[grid.orientation]} ]   ",
-                                    f"Simulation: ( {pause_set[PAUSED]} )   ",])
+                                    f"Simulation: ( {pause_set[PAUSED]} )   ",]) # f"DEBUG: {last_key}               "
+        
         HUE += HUE_CHANGE
         FRAMENUM += 1
         sleep(1/FRAMERATE)
