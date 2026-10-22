@@ -32,13 +32,17 @@ class Grid:
         global DEFAULT_BRUSH_SIZE, MAX_BRUSH_SIZE, MIN_BRUSH_SIZE
         self.length = length
         self.height = height
+
         self.show_pointer = 1
         self.pointer_x = 0
         self.pointer_y = 0
+
         self.min_brush_size = MIN_BRUSH_SIZE
         self.max_brush_size = MAX_BRUSH_SIZE
         self.brush_size = DEFAULT_BRUSH_SIZE
         self.brush_type = 1
+        self.brush_shape = 0
+
         self.orientation = "up"
 
         self.matrix = [[Cell(row=row, col=col) for col in range(length)]
@@ -306,28 +310,56 @@ class Grid:
         if key == "d":
             self.pointer_x = (self.pointer_x + 1) % self.length
 
-    def handle_action(self, key):
-        new_brush_size = self.brush_size - 1
-        if key == " ":
-            if new_brush_size < 0:
-                return
-            for x in range(self.pointer_x - new_brush_size, self.pointer_x + new_brush_size+1):
-                for y in range(self.pointer_y - new_brush_size, self.pointer_y + new_brush_size+1):
+    def handle_action(self, key, shapes):
+        brush_size = self.brush_size - 1
+        if key != " " or brush_size < 0:
+            return
+
+        # continue work on this
+        # complete refactor of the loops, new vars for avg, etc
+
+        # shape: solid square
+        if self.brush_shape == 0:
+            for x in range(self.pointer_x - brush_size, self.pointer_x + brush_size+1):
+                for y in range(self.pointer_y - brush_size, self.pointer_y + brush_size+1):
                     if y >= 0 and y <= self.height - 1:
                         if x >= 0 and x <= self.length - 1:
                             self.matrix[y][x].state = self.brush_type
 
-    def handle_brush_size(self, key):
-        if key == "-":
-            self.brush_size = max(self.min_brush_size, self.brush_size - 1)
-        if key == "=":
-            self.brush_size = min(self.brush_size + 1, self.max_brush_size)
+        # shape: solid circle
+        elif self.brush_shape == 1:
+            ...
 
-    def handle_brush_type(self, key, elements):
+        # shape: hollow square
+        elif self.brush_shape == 2:
+            ...
+
+        # shape: hollow circle
+        elif self.brush_shape == 3:
+            ...
+
+        # shape: fill tool
+        elif self.brush_shape == 4:
+            ...
+
+    def handle_brush_attributes(self, key, elements, shapes):
+        # Type
         if key == "q":
             self.brush_type = (self.brush_type - 1) % len(elements)
         if key == "e":
             self.brush_type = (self.brush_type + 1) % len(elements)
+
+        # Shape
+        if key == "Q":
+            self.brush_shape = (self.brush_shape - 1) % len(shapes)
+        if key == "E":
+            self.brush_shape = (self.brush_shape + 1) % len(shapes)
+
+        # Size
+        if key == "-":
+            self.brush_size = max(self.min_brush_size, self.brush_size - 1)
+        if key == "=":
+            self.brush_size = min(self.brush_size + 1, self.max_brush_size)
 
     def handle_orientation(self, key):
         if key == "UP":
@@ -392,17 +424,17 @@ class Grid:
                 on_pointer = (element.row == self.pointer_y and element.col == self.pointer_x)
                 if on_pointer and self.show_pointer:
                     if element.state == 0:
-                        grid += color("◌", hsv=(HUE, 100, 100))
-                        # grid += "◌"
+                        grid += color("⊹", hsv=(HUE, 100, 100))
+                        # grid += "◌"⊹
                     elif element.state in (1, 5):
-                        grid += color("○", hsv=(HUE, 100, 100))
-                        # grid += "○"
+                        grid += color("◇", hsv=(HUE, 100, 100))
+                        # grid += "○"◇
                     elif element.state in (2, 4):
-                        grid += color("●", hsv=(HUE, 100, 100))
-                        # grid += "●"
+                        grid += color("◈", hsv=(HUE, 100, 100))
+                        # grid += "●"◈
                     elif element.state == 3:
-                        grid += color("◉", hsv=(HUE, 100, 100))
-                        # grid += "◉"
+                        grid += color("◆", hsv=(HUE, 100, 100))
+                        # grid += "◉"◆
                 else:
                     if element.state == 0:
                         grid += color("∙", rgb=(15, 15, 15))
@@ -481,16 +513,58 @@ def color(str: str, hsv: tuple = None, rgb: tuple = None):
     return f"\033[38;2;{r};{g};{b}m{str}\033[0m"
 
 def get_keypress():
+    '''Silently checks for input.
+    Tab: tab
+    Caps Lock: caps lock
+    Enter: enter
+    Ctrl: ^
+    Alt: *'''
     if sys.platform == "win32":
         import msvcrt
         if not msvcrt.kbhit():
-            return None          
+            return None         
+        
         ch = msvcrt.getch()
+        
+        # Handle extended keys / Alt combinations (start with \x00 or \xe0)
         if ch in (b'\x00', b'\xe0'):
             ch2 = msvcrt.getch()
-            return {'H': 'UP', 'P': 'DOWN', 'K': 'LEFT', 'M': 'RIGHT'}.get(
-                ch2.decode('utf-8', errors='ignore'))
-        return ch.decode('utf-8', errors='ignore')
+            
+            # Map standard arrow keys
+            arrow_map = {'H': 'UP', 'P': 'DOWN', 'K': 'LEFT', 'M': 'RIGHT'}
+            if ch2.decode('utf-8', errors='ignore') in arrow_map:
+                return arrow_map.get(ch2.decode('utf-8', errors='ignore'))
+            
+            # Map Alt + letter scan codes on Windows (e.g., Alt + x is scan code 45)
+            alt_scan_codes = {
+                30: 'a', 48: 'b', 46: 'c', 32: 'd', 18: 'e', 33: 'f', 34: 'g', 
+                35: 'h', 23: 'i', 36: 'j', 37: 'k', 38: 'l', 50: 'm', 49: 'n', 
+                24: 'o', 25: 'p', 16: 'q', 19: 'r', 31: 's', 20: 't', 22: 'u', 
+                47: 'v', 17: 'w', 45: 'x', 21: 'y', 44: 'z'
+            }
+            code = ord(ch2)
+            if code in alt_scan_codes:
+                return f"*{alt_scan_codes[code]}"
+            
+            return None
+
+        # Handle Enter key
+        if ch in (b'\r', b'\n'):
+            return 'enter'
+        
+        # Handle Tab key
+        if ch == b'\t':
+            return 'tab'
+
+        # Handle Ctrl + key (ASCII values 1 to 26 represent Ctrl+A through Ctrl+Z)
+        val = ord(ch)
+        if 1 <= val <= 26:
+            letter = chr(val + 96)
+            return f"^{letter}"
+
+        decoded = ch.decode('utf-8', errors='ignore')
+        
+        return decoded
 
 def main():
     global FRAMENUM, FRAMERATE, DYNAMIC_LIGHTING, \
@@ -513,21 +587,24 @@ def main():
     MAX_UNDO = 10000 # the max cap of undo recordings, set this to low if experience performance issues [default: 1000]
     UNDO_LIST = [Grid(L, B).matrix] * MAX_UNDO
 
-    # last_key = None
+    last_key = None # debug
 
     elements = {0: "Air", 1: "Sand", 2: "Water", 3: "Steel", 4: "Acid", 5: "Steam"}
     gravity_set = {"up": "↧", "down": "↥", "left": "↦", "right": "↤"}
     pause_set = {False: "▢", True: "▶"}
+    shapes_set = {0: "Solid Square", 1: "Solid Circle", 2: "Hollow Square", 3: "Hollow Circle", 4: "Fill Tool"}
 
     sys.stdout.write("\033[H\033[2J")
     sys.stdout.write("\033[?25l")
     sys.stdout.write("\033[2K")
     grid = Grid(L,B)
-    grid.show(extra=[  f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}]",
-                                f"Brush: <{grid.brush_size}px> [{elements[grid.brush_type]}]", 
-                                f"Frame Rate: [{(FRAMERATE):.0f}]",
-                                f"Gravity: [ {gravity_set[grid.orientation]} ]",
-                                f"Simulation: ( {pause_set[PAUSED]} )"])
+    grid.show(extra=[   
+    f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}]",
+    f"Brush: <{grid.brush_size}px> ({elements[grid.brush_type]}) [{shapes_set[grid.brush_shape]}]                        ", 
+    f"Frame Rate: [{(FRAMERATE):.0f}]",
+    f"Gravity: [ {gravity_set[grid.orientation]} ]",
+    f"Simulation: ( {pause_set[PAUSED]} )"
+])
 
     # main loop 
     while True:
@@ -538,9 +615,8 @@ def main():
             grid.record_undo()
         grid.reset_update_flags()
         grid.handle_pointer(pressed_key)
-        grid.handle_action(pressed_key)
-        grid.handle_brush_size(pressed_key)
-        grid.handle_brush_type(pressed_key, elements)
+        grid.handle_action(pressed_key, shapes_set)
+        grid.handle_brush_attributes(pressed_key, elements, shapes_set)
         grid.handle_orientation(pressed_key)
         grid.handle_clear(pressed_key)
         grid.handle_paused(pressed_key)
@@ -556,16 +632,18 @@ def main():
         if pressed_key == "`":
             HUE_CHANGE = 1 - HUE_CHANGE
 
-        # if pressed_key is None:
-        #     pass
-        # else:
-        #     last_key = pressed_key
+        if pressed_key is None: # debug -
+            pass
+        else:
+            last_key = pressed_key # - debug
 
-        grid.show(extra=[  f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}]   ",
-                                    f"Brush: <{grid.brush_size}px> [{elements[grid.brush_type]}]   ",
-                                    f"Frame Rate: [{FRAMERATE}]   ",
-                                    f"Gravity: [ {gravity_set[grid.orientation]} ]   ",
-                                    f"Simulation: ( {pause_set[PAUSED]} )   ",]) # f"DEBUG: {last_key}               "
+        grid.show(extra=[   
+    f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}]   ",
+    f"Brush: <{grid.brush_size}px> ({elements[grid.brush_type]}) [{shapes_set[grid.brush_shape]}]                   ",
+    f"Frame Rate: [{FRAMERATE}]   ",
+    f"Gravity: [ {gravity_set[grid.orientation]} ]   ",
+    f"Simulation: ( {pause_set[PAUSED]} )   ", f"DEBUG: {last_key}               "
+])
         
         HUE += HUE_CHANGE
         FRAMENUM += 1
