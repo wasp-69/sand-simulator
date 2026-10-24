@@ -27,7 +27,7 @@ class Cell:
             return (avg * 360 ) + HUE 
 
 class Grid:
-    
+
     def __init__(self, length, height):
         global DEFAULT_BRUSH_SIZE, MAX_BRUSH_SIZE, MIN_BRUSH_SIZE
         self.length = length
@@ -144,7 +144,7 @@ class Grid:
                 return self.matrix[y + n][x]
         else:
             return False
-            
+
     def update(self):
         if self.orientation == "up":
             matrixrange = (range(0, self.length), range(self.height-1, -1, -1))
@@ -221,7 +221,7 @@ class Grid:
         # plan to add better behaviour:
         # find to which side, left or right, does more empty cells exist
         # then move to that side
-            
+
     def handle_acid(self, cell):
         if random.randint(0,1):
             first = self.left(cell=cell)
@@ -317,30 +317,50 @@ class Grid:
 
         # continue work on this
         # complete refactor of the loops, new vars for avg, etc
+        min_x = self.pointer_x - brush_size
+        max_x = self.pointer_x + brush_size
+        min_y = self.pointer_y - brush_size
+        max_y = self.pointer_y + brush_size
 
         # shape: solid square
         if self.brush_shape == 0:
-            for x in range(self.pointer_x - brush_size, self.pointer_x + brush_size+1):
-                for y in range(self.pointer_y - brush_size, self.pointer_y + brush_size+1):
-                    if y >= 0 and y <= self.height - 1:
-                        if x >= 0 and x <= self.length - 1:
+            for x in range(min_x, max_x + 1):
+                for y in range(min_y, max_y + 1):
+                    if y >= 0 and y <= self.height - 1:         # These 2 checks are required for all brush shapes,
+                        if x >= 0 and x <= self.length - 1:     # Because they are out-of-bound checks.
                             self.matrix[y][x].state = self.brush_type
 
         # shape: solid circle
         elif self.brush_shape == 1:
-            ...
+            for x in range(min_x, max_x + 1):
+                for y in range(min_y, max_y + 1):
+                    if ((x - self.pointer_x)**2 + (y - self.pointer_y)**2 - brush_size**2 < brush_size) or brush_size == 0:
+                        if y >= 0 and y <= self.height - 1:         # These 2 checks are required for all brush shapes,
+                            if x >= 0 and x <= self.length - 1:     # Because they are out-of-bound checks.
+                                self.matrix[y][x].state = self.brush_type
 
         # shape: hollow square
         elif self.brush_shape == 2:
-            ...
+            for x in range(min_x, max_x + 1):
+                for y in range(min_y, max_y + 1):
+                    if abs(x - self.pointer_x) == brush_size or abs(y - self.pointer_y) == brush_size:
+                        if y >= 0 and y <= self.height - 1:         # These 2 checks are required for all brush shapes,
+                            if x >= 0 and x <= self.length - 1:     # Because they are out-of-bound checks.
+                                self.matrix[y][x].state = self.brush_type
 
         # shape: hollow circle
         elif self.brush_shape == 3:
-            ...
+            for x in range(min_x, max_x + 1):
+                for y in range(min_y, max_y + 1):
+                    omega = (x - self.pointer_x)**2 + (y - self.pointer_y)**2 - brush_size**2
+                    if (-brush_size <= omega < brush_size and omega != -brush_size**2) or brush_size == 0:
+                        if y >= 0 and y <= self.height - 1:         # These 2 checks are required for all brush shapes,
+                            if x >= 0 and x <= self.length - 1:     # Because they are out-of-bound checks.
+                                self.matrix[y][x].state = self.brush_type
 
         # shape: fill tool
         elif self.brush_shape == 4:
-            ...
+            raise NotImplementedError
 
     def handle_brush_attributes(self, key, elements, shapes):
         # Type
@@ -584,7 +604,7 @@ def main():
     PAUSED = False
     RAINBOW_SAND = False
     RBS_COUNTER = 0
-    MAX_UNDO = 10000 # the max cap of undo recordings, set this to low if experience performance issues [default: 1000]
+    MAX_UNDO = 1000 # the max cap of undo recordings, set this to low if experience performance issues [default: 1000]
     UNDO_LIST = [Grid(L, B).matrix] * MAX_UNDO
 
     last_key = None # debug
@@ -644,7 +664,7 @@ def main():
     f"Gravity: [ {gravity_set[grid.orientation]} ]   ",
     f"Simulation: ( {pause_set[PAUSED]} )   ", f"DEBUG: {last_key}               "
 ])
-        
+
         HUE += HUE_CHANGE
         FRAMENUM += 1
         sleep(1/FRAMERATE)
