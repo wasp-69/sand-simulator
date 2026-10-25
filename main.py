@@ -310,7 +310,9 @@ class Grid:
         if key == "d":
             self.pointer_x = (self.pointer_x + 1) % self.length
 
-    def handle_action(self, key, shapes):
+        # to add: pointer jumping
+
+    def handle_action(self, key):
         brush_size = self.brush_size - 1
         if key != " " or brush_size < 0:
             return
@@ -322,7 +324,7 @@ class Grid:
         min_y = self.pointer_y - brush_size
         max_y = self.pointer_y + brush_size
 
-        # shape: solid square
+        # shape: Solid Square
         if self.brush_shape == 0:
             for x in range(min_x, max_x + 1):
                 for y in range(min_y, max_y + 1):
@@ -330,17 +332,8 @@ class Grid:
                         if x >= 0 and x <= self.length - 1:     # Because they are out-of-bound checks.
                             self.matrix[y][x].state = self.brush_type
 
-        # shape: solid circle
+        # shape: Hollow Square
         elif self.brush_shape == 1:
-            for x in range(min_x, max_x + 1):
-                for y in range(min_y, max_y + 1):
-                    if ((x - self.pointer_x)**2 + (y - self.pointer_y)**2 - brush_size**2 < brush_size) or brush_size == 0:
-                        if y >= 0 and y <= self.height - 1:         # These 2 checks are required for all brush shapes,
-                            if x >= 0 and x <= self.length - 1:     # Because they are out-of-bound checks.
-                                self.matrix[y][x].state = self.brush_type
-
-        # shape: hollow square
-        elif self.brush_shape == 2:
             for x in range(min_x, max_x + 1):
                 for y in range(min_y, max_y + 1):
                     if abs(x - self.pointer_x) == brush_size or abs(y - self.pointer_y) == brush_size:
@@ -348,7 +341,16 @@ class Grid:
                             if x >= 0 and x <= self.length - 1:     # Because they are out-of-bound checks.
                                 self.matrix[y][x].state = self.brush_type
 
-        # shape: hollow circle
+        # shape: Solid Circle
+        elif self.brush_shape == 2:
+            for x in range(min_x, max_x + 1):
+                for y in range(min_y, max_y + 1):
+                    if ((x - self.pointer_x)**2 + (y - self.pointer_y)**2 - brush_size**2 < brush_size) or brush_size == 0:
+                        if y >= 0 and y <= self.height - 1:         # These 2 checks are required for all brush shapes,
+                            if x >= 0 and x <= self.length - 1:     # Because they are out-of-bound checks.
+                                self.matrix[y][x].state = self.brush_type
+
+        # shape: Hollow Circle
         elif self.brush_shape == 3:
             for x in range(min_x, max_x + 1):
                 for y in range(min_y, max_y + 1):
@@ -358,8 +360,56 @@ class Grid:
                             if x >= 0 and x <= self.length - 1:     # Because they are out-of-bound checks.
                                 self.matrix[y][x].state = self.brush_type
 
-        # shape: fill tool
+        # shape: Solid Diamond
         elif self.brush_shape == 4:
+            for x in range(min_x, max_x + 1):
+                for y in range(min_y, max_y + 1):
+                    if abs(x - self.pointer_x) + abs(y - self.pointer_y) <= brush_size:
+                        if y >= 0 and y <= self.height - 1:         # These 2 checks are required for all brush shapes,
+                            if x >= 0 and x <= self.length - 1:     # Because they are out-of-bound checks.
+                                self.matrix[y][x].state = self.brush_type
+
+        # shape: Hollow Diamond
+        elif self.brush_shape == 5:
+            for x in range(min_x, max_x + 1):
+                for y in range(min_y, max_y + 1):
+                    if abs(x - self.pointer_x) + abs(y - self.pointer_y) == brush_size:
+                        if y >= 0 and y <= self.height - 1:         # These 2 checks are required for all brush shapes,
+                            if x >= 0 and x <= self.length - 1:     # Because they are out-of-bound checks.
+                                self.matrix[y][x].state = self.brush_type
+
+        # shape: Horizontal Line
+        elif self.brush_shape == 6:
+            for x in range(min_x, max_x + 1):
+                if x >= 0 and x <= self.length - 1:     # Just one check this time.
+                    self.matrix[self.pointer_y][x].state = self.brush_type
+
+        # shape: Vertical Line
+        elif self.brush_shape == 7:
+            for y in range(min_y, max_y + 1):
+                if y >= 0 and y <= self.height - 1:     # Just one check this time.
+                    self.matrix[y][self.pointer_x].state = self.brush_type
+
+        # shape: Main diagonal
+        elif self.brush_shape == 8:
+            for x in range(min_x, max_x + 1):
+                for y in range(min_y, max_y + 1):
+                    if self.pointer_x - x == self.pointer_y - y:
+                        if y >= 0 and y <= self.height - 1:         # These 2 checks are required for all brush shapes,
+                            if x >= 0 and x <= self.length - 1:     # Because they are out-of-bound checks.
+                                self.matrix[y][x].state = self.brush_type
+
+        # shape: Anti diagonal
+        elif self.brush_shape == 9:
+            for x in range(min_x, max_x + 1):
+                for y in range(min_y, max_y + 1):
+                    if (self.pointer_x - x) + (self.pointer_y - y ) == 0:
+                        if y >= 0 and y <= self.height - 1:         # These 2 checks are required for all brush shapes,
+                            if x >= 0 and x <= self.length - 1:     # Because they are out-of-bound checks.
+                                self.matrix[y][x].state = self.brush_type
+                                
+        # shape: Fill Tool
+        elif self.brush_shape == 10:
             raise NotImplementedError
 
     def handle_brush_attributes(self, key, elements, shapes):
@@ -380,6 +430,10 @@ class Grid:
             self.brush_size = max(self.min_brush_size, self.brush_size - 1)
         if key == "=":
             self.brush_size = min(self.brush_size + 1, self.max_brush_size)
+        if key == "+":
+            self.brush_size = self.max_brush_size
+        if key == "_":
+            self.brush_size = self.min_brush_size
 
     def handle_orientation(self, key):
         if key == "UP":
@@ -395,23 +449,6 @@ class Grid:
         if key == "C":
             self.matrix = [[Cell(row=row, col=col) for col in range(self.length)]
                        for row in range(self.height)]
-
-    def color_depth_variance(self, cell, hsv: tuple):
-        global DYNAMIC_LIGHTING 
-        if not DYNAMIC_LIGHTING:
-            return hsv
-        
-        h, s, v = hsv
-
-        for i in range(1, 16):
-            if self.up(cell, i, True):
-
-                if self.up(cell, i, True).state in (2, 4):
-                    v -= 5
-                elif self.up(cell, i, True).state in (1, 3):
-                    v -= 7
-
-        return (h, s, max(20 , v))
 
     def handle_paused(self, key):
         global PAUSED
@@ -434,6 +471,23 @@ class Grid:
         if len(UNDO_LIST) > MAX_UNDO:
             UNDO_LIST.pop(0)
 
+    def color_depth_variance(self, cell, hsv: tuple):
+        global DYNAMIC_LIGHTING 
+        if not DYNAMIC_LIGHTING:
+            return hsv
+        
+        h, s, v = hsv
+
+        for i in range(1, 16):
+            if self.up(cell, i, True):
+
+                if self.up(cell, i, True).state in (2, 4):
+                    v -= 5
+                elif self.up(cell, i, True).state in (1, 3):
+                    v -= 7
+
+        return (h, s, max(20 , v))
+    
     def show(self, extra=0):
         global HUE
         grid = ""
@@ -481,8 +535,6 @@ class Grid:
         sys.stdout.write("\033[H")
         sys.stdout.write(grid)
         sys.stdout.write("═"*2*self.length + "\n")
-        # if extra:
-        #     sys.stdout.write(extra+"\n")
         sys.stdout.flush()
 
 
@@ -494,7 +546,7 @@ def average(*args):
 
 def handle_RBS(key):
     global RAINBOW_SAND, RBS_COUNTER
-    code = "Anmol"
+    code = "689689689"
 
     if key is None:
         return
@@ -502,6 +554,8 @@ def handle_RBS(key):
     if key in code:
         if code[RBS_COUNTER] == key:
             RBS_COUNTER += 1
+        else:
+            RBS_COUNTER = 0
     else:
         RBS_COUNTER = 0
 
@@ -594,13 +648,13 @@ def main():
 
     L, B = 30, 30 # length and height of the grid [default: 30x30]
     FRAMERATE = 50 # decrease if experiencing stutter [default: 50]
-    MIN_BRUSH_SIZE = 0
-    MAX_BRUSH_SIZE = 5
+    MIN_BRUSH_SIZE = 0 # [default: 0]
+    MAX_BRUSH_SIZE = 7 # [default: 7]
     DEFAULT_BRUSH_SIZE = 1
     HUE = 0
     FRAMENUM = 0
     HUE_CHANGE = 1
-    DYNAMIC_LIGHTING = True
+    DYNAMIC_LIGHTING = True # [default: True]
     PAUSED = False
     RAINBOW_SAND = False
     RBS_COUNTER = 0
@@ -612,7 +666,7 @@ def main():
     elements = {0: "Air", 1: "Sand", 2: "Water", 3: "Steel", 4: "Acid", 5: "Steam"}
     gravity_set = {"up": "↧", "down": "↥", "left": "↦", "right": "↤"}
     pause_set = {False: "▢", True: "▶"}
-    shapes_set = {0: "Solid Square", 1: "Solid Circle", 2: "Hollow Square", 3: "Hollow Circle", 4: "Fill Tool"}
+    shapes_set = {0: "Solid Square", 1: "Hollow Square", 2: "Solid Circle", 3: "Hollow Circle", 4: "Solid Diamond", 5: "Hollow Diamond", 6: "Horizontal Line", 7: "Vertical Line", 8: "Primary Diagonal", 9: "Secondary Diagonal", 10: "Fill Tool"}
 
     sys.stdout.write("\033[H\033[2J")
     sys.stdout.write("\033[?25l")
@@ -635,7 +689,7 @@ def main():
             grid.record_undo()
         grid.reset_update_flags()
         grid.handle_pointer(pressed_key)
-        grid.handle_action(pressed_key, shapes_set)
+        grid.handle_action(pressed_key)
         grid.handle_brush_attributes(pressed_key, elements, shapes_set)
         grid.handle_orientation(pressed_key)
         grid.handle_clear(pressed_key)
