@@ -26,6 +26,11 @@ class Cell:
             avg = average(math.sin(theta)*(self.row / height), math.cos(theta)*(self.col / length))
             return (avg * 360 ) + HUE 
 
+    def is_static(self):
+        if self.state in (0,3):
+            return True
+        return False
+
 class Grid:
 
     def __init__(self, length, height):
@@ -310,8 +315,32 @@ class Grid:
         if key == "d":
             self.pointer_x = (self.pointer_x + 1) % self.length
 
-        # to add: pointer jumping
-
+        current = self.matrix[self.pointer_y][self.pointer_x]
+        if key == "W":
+            if self.up(current):
+                self.handle_pointer(key.lower())
+            while self.up(current) and (current.state == self.up(current).state):
+                self.handle_pointer(key.lower())
+                current = self.matrix[self.pointer_y][self.pointer_x]
+        if key == "S":
+            if self.down(current):
+                self.handle_pointer(key.lower())
+            while self.down(current) and (current.state == self.down(current).state):
+                self.handle_pointer(key.lower())
+                current = self.matrix[self.pointer_y][self.pointer_x]
+        if key == "A":
+            if self.left(current):
+                self.handle_pointer(key.lower())
+            while self.left(current) and (current.state == self.left(current).state):
+                self.handle_pointer(key.lower())
+                current = self.matrix[self.pointer_y][self.pointer_x]
+        if key == "D":
+            if self.right(current):
+                self.handle_pointer(key.lower())
+            while self.right(current) and (current.state == self.right(current).state):
+                self.handle_pointer(key.lower())
+                current = self.matrix[self.pointer_y][self.pointer_x]
+        
     def handle_action(self, key):
         brush_size = self.brush_size - 1
         if key != " " or brush_size < 0:
@@ -410,7 +439,23 @@ class Grid:
                                 
         # shape: Fill Tool
         elif self.brush_shape == 10:
-            raise NotImplementedError
+           current = self.matrix[self.pointer_y][self.pointer_x]
+           target = self.brush_type
+           empty = current.state
+           self.flood_fill(current, target, empty, current)
+
+    def flood_fill(self, current: Cell, target: int, empty: int, origin: Cell):
+        if target == empty:
+            return
+        if self.brush_size != 1:
+            dists = get_dist(current, origin)
+            if dists[0] > self.brush_size or dists[1] > self.brush_size:
+                return
+        neighbors = (self.up(current), self.down(current), self.left(current), self.right(current))
+        for cell in neighbors:
+            current.state = target
+            if (cell is not None) and cell.state == empty:
+                self.flood_fill(cell, target, empty, origin)
 
     def handle_brush_attributes(self, key, elements, shapes):
         # Type
@@ -537,6 +582,10 @@ class Grid:
         sys.stdout.write("═"*2*self.length + "\n")
         sys.stdout.flush()
 
+def get_dist(cell1: Cell, cell2: Cell) -> tuple[int]:
+    xdist = abs(cell1.col - cell2.col)
+    ydist = abs(cell1.row - cell2.row)
+    return (xdist, ydist)
 
 def average(*args):
     s = 0
@@ -647,17 +696,24 @@ def main():
         RAINBOW_SAND, HUE, RBS_COUNTER
 
     L, B = 30, 30 # length and height of the grid [default: 30x30]
-    FRAMERATE = 50 # decrease if experiencing stutter [default: 50]
+
     MIN_BRUSH_SIZE = 0 # [default: 0]
     MAX_BRUSH_SIZE = 7 # [default: 7]
     DEFAULT_BRUSH_SIZE = 1
-    HUE = 0
+
+    FRAMERATE = 50 # decrease if experiencing stutter [default: 50]
     FRAMENUM = 0
+
+    HUE = 0
     HUE_CHANGE = 1
-    DYNAMIC_LIGHTING = True # [default: True]
+
     PAUSED = False
+
+    DYNAMIC_LIGHTING = True # [default: True]
+
     RAINBOW_SAND = False
     RBS_COUNTER = 0
+    
     MAX_UNDO = 1000 # the max cap of undo recordings, set this to low if experience performance issues [default: 1000]
     UNDO_LIST = [Grid(L, B).matrix] * MAX_UNDO
 
