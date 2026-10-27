@@ -3,6 +3,7 @@
 ## Movement and Action
 
 - `WASD` to **move** around.
+- `Shift + WASD` to **jump** cursor around.
 - `SPACE` to **paint**.
 
 ## Brush Control
@@ -21,7 +22,7 @@
 - `[` & `]` to cycle through **framerate**, if the simulation is _unpaused_.
 - `[` & `]` to **step** back or forwards in the simulation, if _paused_.
 
-## Miscellaneous 
+## Miscellaneous
 
 - `Shift + C` to **clear** the entire sandbox.
 - `` ` `` to stop **cursor RGB**.

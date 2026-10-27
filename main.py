@@ -713,7 +713,7 @@ def main():
 
     RAINBOW_SAND = False
     RBS_COUNTER = 0
-    
+
     MAX_UNDO = 1000 # the max cap of undo recordings, set this to low if experience performance issues [default: 1000]
     UNDO_LIST = [Grid(L, B).matrix] * MAX_UNDO
 
@@ -741,8 +741,8 @@ def main():
         pressed_key = get_keypress()
 
         if not PAUSED:
-            grid.update()
             grid.record_undo()
+            grid.update()
         grid.reset_update_flags()
         grid.handle_pointer(pressed_key)
         grid.handle_action(pressed_key)
