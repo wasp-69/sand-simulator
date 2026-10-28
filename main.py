@@ -3,7 +3,7 @@ import random
 from time import sleep
 from colorsys import hsv_to_rgb
 import math
-
+from collections import deque
 
 class Cell:
 
@@ -315,31 +315,23 @@ class Grid:
         if key == "d":
             self.pointer_x = (self.pointer_x + 1) % self.length
 
-        current = self.matrix[self.pointer_y][self.pointer_x]
-        if key == "W":
-            if self.up(current):
+        if key in ("W","A","S","D"):
+            look = {"W": self.up, "A": self.left, "S": self.down, "D": self.right}[key]
+            cur = self.matrix[self.pointer_y][self.pointer_x]
+
+            if look(cur, static=True) is None:
+                return
+            
+            self.handle_pointer(key.lower())
+            cur = self.matrix[self.pointer_y][self.pointer_x]
+            while True:
+                nxt = look(cur, static=True)
+
+                if nxt is None or nxt.state != cur.state:
+                    break
+
                 self.handle_pointer(key.lower())
-            while self.up(current) and (current.state == self.up(current).state):
-                self.handle_pointer(key.lower())
-                current = self.matrix[self.pointer_y][self.pointer_x]
-        if key == "S":
-            if self.down(current):
-                self.handle_pointer(key.lower())
-            while self.down(current) and (current.state == self.down(current).state):
-                self.handle_pointer(key.lower())
-                current = self.matrix[self.pointer_y][self.pointer_x]
-        if key == "A":
-            if self.left(current):
-                self.handle_pointer(key.lower())
-            while self.left(current) and (current.state == self.left(current).state):
-                self.handle_pointer(key.lower())
-                current = self.matrix[self.pointer_y][self.pointer_x]
-        if key == "D":
-            if self.right(current):
-                self.handle_pointer(key.lower())
-            while self.right(current) and (current.state == self.right(current).state):
-                self.handle_pointer(key.lower())
-                current = self.matrix[self.pointer_y][self.pointer_x]
+                cur = self.matrix[self.pointer_y][self.pointer_x]
         
     def handle_action(self, key):
         brush_size = self.brush_size - 1
@@ -442,20 +434,29 @@ class Grid:
            current = self.matrix[self.pointer_y][self.pointer_x]
            target = self.brush_type
            empty = current.state
-           self.flood_fill(current, target, empty, current)
+           self.flood_fill(target, empty, current)
 
-    def flood_fill(self, current: Cell, target: int, empty: int, origin: Cell):
-        if target == empty:
+    def flood_fill(self, target: int, empty: int, origin: Cell):
+        if target == empty == origin.state:
             return
-        if self.brush_size != 1:
-            dists = get_dist(current, origin)
-            if dists[0] > self.brush_size or dists[1] > self.brush_size:
-                return
-        neighbors = (self.up(current), self.down(current), self.left(current), self.right(current))
-        for cell in neighbors:
-            current.state = target
-            if (cell is not None) and cell.state == empty:
-                self.flood_fill(cell, target, empty, origin)
+
+        limit = self.brush_size
+        if limit == 1:
+            limit = None
+        origin.state = target
+        stack = [origin]
+
+        while stack:
+            cell = stack.pop()
+            neighbours = (self.up(cell),self.down(cell), self.left(cell), self.right(cell))
+            for n in neighbours:
+                if not n or n.state != empty:
+                    continue
+                if limit is not None and max(get_dist(n, origin)) > limit:
+                    continue
+
+                n.state = target
+                stack.append(n)
 
     def handle_brush_attributes(self, key, elements, shapes):
         # Type
@@ -505,16 +506,24 @@ class Grid:
                 self.record_undo()
                 self.update()
             elif key == "[" and UNDO_LIST:
-                self.matrix = UNDO_LIST.pop()
-                if not PAUSED and UNDO_LIST:
-                    self.matrix = UNDO_LIST.pop()
+                self.restore_undo()
 
     def record_undo(self):
-        global UNDO_LIST, MAX_UNDO
-        snapshot = [[Cell(row=c.row, col=c.col, state=c.state, sand_color=c.sand_color) for c in row]for row in self.matrix]
+        global UNDO_LIST
+        raw = (c.state for row in self.matrix for c in row)
+        raw_col = (c.sand_color + 10 for row in self.matrix for c in row)
+        snapshot = (bytes(raw), bytes(raw_col))
         UNDO_LIST.append(snapshot)
-        if len(UNDO_LIST) > MAX_UNDO:
-            UNDO_LIST.pop(0)
+
+    def restore_undo(self):
+        global UNDO_LIST
+        states, colors = UNDO_LIST.pop()
+
+        i = 0
+        for row in self.matrix:
+            for c in row:
+                c.state, c.sand_color = states[i], colors[i] - 10
+                i += 1
 
     def color_depth_variance(self, cell, hsv: tuple):
         global DYNAMIC_LIGHTING 
@@ -714,8 +723,8 @@ def main():
     RAINBOW_SAND = False
     RBS_COUNTER = 0
 
-    MAX_UNDO = 1000 # the max cap of undo recordings, set this to low if experience performance issues [default: 1000]
-    UNDO_LIST = [Grid(L, B).matrix] * MAX_UNDO
+    MAX_UNDO = 10000 # the max cap of undo recordings, set this to low if experience performance issues [default: 1000]
+    UNDO_LIST = deque(maxlen=MAX_UNDO) 
 
     last_key = None # debug
 
