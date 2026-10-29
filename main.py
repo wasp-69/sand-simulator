@@ -7,15 +7,11 @@ from collections import deque
 
 class Cell:
 
-    def __init__(self, row, col, state=0, sand_color=None):
+    def __init__(self, row, col, state=0):
         self.state = state
         self.row = row
         self.col = col
         self.update = True
-        if sand_color is None:
-            self.sand_color = random.randint(-10, 20)
-        else:
-            self.sand_color = sand_color
 
     def get_sand_hue(self, height, length):
         global RAINBOW_SAND, HUE
@@ -27,9 +23,7 @@ class Cell:
             return (avg * 360 ) + HUE 
 
     def is_static(self):
-        if self.state in (0,3):
-            return True
-        return False
+        return self.state in (0, 3, 7, 10)
 
 class Grid:
 
@@ -55,7 +49,6 @@ class Grid:
 
     def swap(self, cell1: Cell, cell2: Cell):
         cell1.state, cell2.state = cell2.state, cell1.state
-        cell1.sand_color, cell2.sand_color = cell2.sand_color, cell1.sand_color
 
     def reset_update_flags(self):
         for x in range(0, self.length):
@@ -173,7 +166,14 @@ class Grid:
                     self.handle_acid(cell)
                 elif cell.state == 5:
                     self.handle_steam(cell)
-
+                elif cell.state == 6:
+                    ...
+                elif cell.state == 8:
+                    ...
+                elif cell.state == 9:
+                    ...
+                elif cell.state == 10:
+                    ...
                 # sleep(1)
 
     def handle_sand(self, cell: Cell):
@@ -305,6 +305,45 @@ class Grid:
             self.swap(cell, second)
             second.update = False
 
+    def handle_drywood(self, cell):
+        if random.randint(0,1):
+            first = self.left(cell=cell)
+            second = self.right(cell=cell)
+        else:
+            first = self.right(cell=cell)
+            second = self.left(cell=cell)
+
+        
+
+        # for normal gravity 
+        if self.down(cell=cell) and self.down(cell=cell).state == 0:
+            self.swap(cell, self.down(cell=cell))
+        elif cell.update and self.down(cell=cell) and first and self.down(cell=first).state == 0:
+            self.swap(cell, self.down(cell=first))
+            self.down(cell=first).update = False
+        elif cell.update and self.down(cell=cell) and second and self.down(cell=second).state == 0:
+            self.swap(cell, self.down(cell=second))
+            self.down(cell=second).update = False
+
+        # waterlogging
+        elif self.down(cell=cell) and self.down(cell=cell).state == 2:
+            self.swap(cell, self.down(cell=cell))
+        elif cell.update and self.down(cell=cell) and first and self.down(cell=first).state == 2:
+            self.swap(cell, self.down(cell=first))
+            self.down(cell=first).update = False
+        elif cell.update and self.down(cell=cell) and second and self.down(cell=second).state == 2:
+            self.swap(cell, self.down(cell=second))
+            self.down(cell=second).update = False
+
+    def handle_fire(self, cell):
+        ...
+
+    def handle_lava(self, cell):
+        ...
+
+    def handle_obsidian(self, cell):
+        ...
+        
     def handle_pointer(self, key):
         if key == "w":
             self.pointer_y = (self.pointer_y - 1) % self.height
@@ -437,7 +476,7 @@ class Grid:
            self.flood_fill(target, empty, current)
 
     def flood_fill(self, target: int, empty: int, origin: Cell):
-        if target == empty == origin.state:
+        if target == empty:
             return
 
         limit = self.brush_size
@@ -511,18 +550,17 @@ class Grid:
     def record_undo(self):
         global UNDO_LIST
         raw = (c.state for row in self.matrix for c in row)
-        raw_col = (c.sand_color + 10 for row in self.matrix for c in row)
-        snapshot = (bytes(raw), bytes(raw_col))
+        snapshot = bytes(raw)
         UNDO_LIST.append(snapshot)
 
     def restore_undo(self):
         global UNDO_LIST
-        states, colors = UNDO_LIST.pop()
+        states = UNDO_LIST.pop()
 
         i = 0
         for row in self.matrix:
             for c in row:
-                c.state, c.sand_color = states[i], colors[i] - 10
+                c.state = states[i]
                 i += 1
 
     def color_depth_variance(self, cell, hsv: tuple):
@@ -532,13 +570,12 @@ class Grid:
         
         h, s, v = hsv
 
-        for i in range(1, 16):
-            if self.up(cell, i, True):
-
-                if self.up(cell, i, True).state in (2, 4):
-                    v -= 5
-                elif self.up(cell, i, True).state in (1, 3):
-                    v -= 7
+        for i in range(1, min(16, cell.row + 1)):
+            above = self.matrix[cell.row - i][cell.col].state
+            if above in (2, 4):    # translucent
+                v -= 5
+            elif above in (1, 3):  # opaque
+                v -= 7
 
         return (h, s, max(20 , v))
     
@@ -568,7 +605,7 @@ class Grid:
                         grid += color("∙", rgb=(15, 15, 15))
                         # grid += "∙"
                     elif element.state == 1:
-                        grid += color("▩", hsv=self.color_depth_variance(element, (element.get_sand_hue(self.height, self.length), 36, 80 + element.sand_color)))
+                        grid += color("▩", hsv=self.color_depth_variance(element, (element.get_sand_hue(self.height, self.length) % 360, 36, 80)))
                         # grid += "▩"
                     elif element.state == 2:
                         grid += color("■", hsv=self.color_depth_variance(element, (215, 78, 100)))
@@ -580,8 +617,23 @@ class Grid:
                         grid += color("■", hsv=self.color_depth_variance(element, (80, 100, 100)))
                         # grid += "■"
                     elif element.state == 5:
-                        grid += color("▩", hsv=self.color_depth_variance(element, (80, 2, 40 + 1.5*(element.sand_color))))
+                        grid += color("▩", hsv=self.color_depth_variance(element, (80, 2, 40)))
                         # grid += "▩"
+                    elif element.state == 6:
+                        grid += color("▩", hsv=self.color_depth_variance(element, (28, 51, 46)))
+                        # grid += "▩"
+                    elif element.state == 7:
+                        grid += color("◙", hsv=self.color_depth_variance(element, (24, 79, 25)))
+                        # grid += "◙"
+                    elif element.state == 8:
+                        grid += color("●", hsv=self.color_depth_variance(element, (50, 100, 100)))
+                        # grid += "●"
+                    elif element.state == 9:
+                        grid += color("■", hsv=self.color_depth_variance(element, (17, 100, 100)))
+                        # grid += "■"
+                    elif element.state == 10:
+                        grid += color("◙", hsv=self.color_depth_variance(element, (250, 100, 25)))
+                        # grid += "◙"
                 grid += " "
             if extra and rownum != 0 and rownum < len(extra) + 1:
                 grid += "               │   " + extra[rownum-1]
@@ -728,7 +780,7 @@ def main():
 
     last_key = None # debug
 
-    elements = {0: "Air", 1: "Sand", 2: "Water", 3: "Steel", 4: "Acid", 5: "Steam"}
+    elements = {0: "Air", 1: "Sand", 2: "Water", 3: "Steel", 4: "Acid", 5: "Steam", 6: "Dry Wood", 7: "Wet Wood", 8: "Fire", 9: "Lava", 10: "Obsidian"}
     gravity_set = {"up": "↧", "down": "↥", "left": "↦", "right": "↤"}
     pause_set = {False: "▢", True: "▶"}
     shapes_set = {0: "Solid Square", 1: "Hollow Square", 2: "Solid Circle", 3: "Hollow Circle", 4: "Solid Diamond", 5: "Hollow Diamond", 6: "Horizontal Line", 7: "Vertical Line", 8: "Primary Diagonal", 9: "Secondary Diagonal", 10: "Fill Tool"}
