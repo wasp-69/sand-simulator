@@ -5,9 +5,11 @@ from colorsys import hsv_to_rgb
 import math
 from collections import deque
 
+AIR, SAND, WATER, STEEL, ACID, STEAM, DRYWOOD, WETWOOD, FIRE, LAVA, OBSIDIAN = 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+
 class Cell:
 
-    def __init__(self, row, col, state=0):
+    def __init__(self, row, col, state=AIR):
         self.state = state
         self.row = row
         self.col = col
@@ -23,7 +25,7 @@ class Cell:
             return (avg * 360 ) + HUE 
 
     def is_static(self):
-        return self.state in (0, 3, 7, 10)
+        return self.state in (STEEL, WETWOOD, OBSIDIAN)
 
 class Grid:
 
@@ -56,6 +58,8 @@ class Grid:
                 self.matrix[y][x].update = True
 
     def up(self, cell, n: int = 1, static = False):
+        if not cell:
+            return False
         if static:
             top = "up"
         else:
@@ -78,6 +82,8 @@ class Grid:
             return False
 
     def down(self, cell, n: int = 1, static = False):
+        if not cell:
+            return False
         if static:
             top = "up"
         else:
@@ -100,6 +106,8 @@ class Grid:
             return False
 
     def left(self, cell, n: int = 1, static = False):
+        if not cell:
+            return False
         if static:
             top = "up"
         else:
@@ -122,6 +130,8 @@ class Grid:
             return False
 
     def right(self, cell, n: int = 1, static = False):
+        if not cell:
+            return False
         if static:
             top = "up"
         else:
@@ -158,68 +168,68 @@ class Grid:
 
                 cell = self.matrix[y][x] 
 
-                if cell.state == 1:
+                if cell.state == SAND:
                     self.handle_sand(cell)
-                elif cell.state == 2:
+                elif cell.state == WATER:
                     self.handle_water(cell)
-                elif cell.state == 4:
+                elif cell.state == ACID:
                     self.handle_acid(cell)
-                elif cell.state == 5:
+                elif cell.state == STEAM:
                     self.handle_steam(cell)
-                elif cell.state == 6:
+                elif cell.state == DRYWOOD:
+                    self.handle_drywood(cell)
+                elif cell.state == FIRE:
+                    self.handle_fire(cell)
+                elif cell.state == LAVA:
                     ...
-                elif cell.state == 8:
-                    ...
-                elif cell.state == 9:
-                    ...
-                elif cell.state == 10:
+                elif cell.state == OBSIDIAN:
                     ...
                 # sleep(1)
 
     def handle_sand(self, cell: Cell):
         if random.randint(0,1):
-            first = self.left(cell=cell)
-            second = self.right(cell=cell)
+            first = self.left(cell)
+            second = self.right(cell)
         else:
-            first = self.right(cell=cell)
-            second = self.left(cell=cell)
+            first = self.right(cell)
+            second = self.left(cell)
 
         # for normal gravity 
-        if self.down(cell=cell) and self.down(cell=cell).state == 0:
-            self.swap(cell, self.down(cell=cell))
-        elif cell.update and self.down(cell=cell) and first and self.down(cell=first).state == 0:
-            self.swap(cell, self.down(cell=first))
-            self.down(cell=first).update = False
-        elif cell.update and self.down(cell=cell) and second and self.down(cell=second).state == 0:
-            self.swap(cell, self.down(cell=second))
-            self.down(cell=second).update = False
+        if self.down(cell) and self.down(cell).state == AIR:
+            self.swap(cell, self.down(cell))
+        elif cell.update and self.down(cell) and first and self.down(first).state == AIR:
+            self.swap(cell, self.down(first))
+            self.down(first).update = False
+        elif cell.update and self.down(cell) and second and self.down(second).state == AIR:
+            self.swap(cell, self.down(second))
+            self.down(second).update = False
 
         # for swapping with water (density swap)
-        elif self.down(cell=cell) and self.down(cell=cell).state == 2:
-            self.swap(cell, self.down(cell=cell))
-        elif cell.update and self.down(cell=cell) and first and self.down(cell=first).state == 2:
-            self.swap(cell, self.down(cell=first))
-            self.down(cell=first).update = False
-        elif cell.update and self.down(cell=cell) and second and self.down(cell=second).state == 2:
-            self.swap(cell, self.down(cell=second))
-            self.down(cell=second).update = False
+        elif self.down(cell) and self.down(cell).state == WATER:
+            self.swap(cell, self.down(cell))
+        elif cell.update and self.down(cell) and first and self.down(first).state == WATER:
+            self.swap(cell, self.down(first))
+            self.down(first).update = False
+        elif cell.update and self.down(cell) and second and self.down(second).state == WATER:
+            self.swap(cell, self.down(second))
+            self.down(second).update = False
 
     def handle_water(self, cell):
         if random.randint(0,1):
-            first = self.left(cell=cell)
-            second = self.right(cell=cell)
+            first = self.left(cell)
+            second = self.right(cell)
         else:
-            first = self.right(cell=cell)
-            second = self.left(cell=cell)
+            first = self.right(cell)
+            second = self.left(cell)
 
         # for normal gravity 
-        if self.down(cell=cell) and self.down(cell=cell).state == 0:
-            self.swap(cell, self.down(cell=cell))
-            self.down(cell=cell).update = False # potentially breaking
-        elif cell.update and first and first.state == 0:
+        if self.down(cell) and self.down(cell).state == AIR:
+            self.swap(cell, self.down(cell))
+            self.down(cell).update = False # potentially breaking
+        elif cell.update and first and first.state == AIR:
             self.swap(cell, first)
             first.update = False
-        elif cell.update and second and second.state == 0:
+        elif cell.update and second and second.state == AIR:
             self.swap(cell, second)
             second.update = False
 
@@ -229,58 +239,47 @@ class Grid:
 
     def handle_acid(self, cell):
         if random.randint(0,1):
-            first = self.left(cell=cell)
-            second = self.right(cell=cell)
+            first = self.left(cell)
+            second = self.right(cell)
         else:
-            first = self.right(cell=cell)
-            second = self.left(cell=cell)
+            first = self.right(cell)
+            second = self.left(cell)
 
         # for acid dissoulution
-            # for sand
-        if self.down(cell) and self.down(cell).state == 1:
-            cell.state = 0
-            self.down(cell).state = 0
-        elif self.up(cell) and self.up(cell).state == 1:
-            cell.state = 0
-            self.up(cell).state = 0
-        elif first and first.state == 1:
-            cell.state = 0
-            first.state = 0
-        elif second and second.state == 1:
-            cell.state = 0
-            second.state = 0
-            # for water
-        elif self.down(cell) and self.down(cell).state == 2:
-            cell.state = 0
-            self.down(cell).state = 5
-        elif self.up(cell) and self.up(cell).state == 2:
-            cell.state = 0
-            self.up(cell).state = 5
-        elif first and first.state == 2:
-            cell.state = 0
-            first.state = 5
-        elif second and second.state == 2:
-            cell.state = 0
-            second.state = 5
+        n: tuple[Cell] = neighbours(cell, self, 3, True)
+
+        for current in n:
+            if current.state == SAND: # sand
+                cell.state = AIR
+                current.state = AIR
+            elif current.state == WATER: # water
+                cell.state = AIR
+                current.state = STEAM
+            elif current.state == DRYWOOD: # dry wood
+                cell.state = AIR
+                current.state = FIRE
+            elif current.state == WETWOOD: # wet wood
+                cell.state = AIR
+                current.state = STEAM
 
         # for normal gravity 
-        if self.down(cell=cell) and self.down(cell=cell).state == 0:
-            self.swap(cell, self.down(cell=cell))
-            self.down(cell=cell).update = False # potentially breaking
-        elif cell.update and first and first.state == 0:
+        if self.down(cell) and self.down(cell).state == AIR:
+            self.swap(cell, self.down(cell))
+            self.down(cell).update = False # potentially breaking
+        elif cell.update and first and first.state == AIR:
             self.swap(cell, first)
             first.update = False
-        elif cell.update and second and second.state == 0:
+        elif cell.update and second and second.state == AIR:
             self.swap(cell, second)
             second.update = False
 
     def handle_steam(self, cell):
         if random.randint(0,1):
-            first = self.left(cell=cell)
-            second = self.right(cell=cell)
+            first = self.left(cell)
+            second = self.right(cell)
         else:
-            first = self.right(cell=cell)
-            second = self.left(cell=cell)
+            first = self.right(cell)
+            second = self.left(cell)
 
         # condensation
         if (self.up(cell) is None) or (self.up(cell) and self.up(cell).state == 3):
@@ -306,37 +305,36 @@ class Grid:
             second.update = False
 
     def handle_drywood(self, cell):
-        if random.randint(0,1):
-            first = self.left(cell=cell)
-            second = self.right(cell=cell)
-        else:
-            first = self.right(cell=cell)
-            second = self.left(cell=cell)
-
-        
-
         # for normal gravity 
-        if self.down(cell=cell) and self.down(cell=cell).state == 0:
-            self.swap(cell, self.down(cell=cell))
-        elif cell.update and self.down(cell=cell) and first and self.down(cell=first).state == 0:
-            self.swap(cell, self.down(cell=first))
-            self.down(cell=first).update = False
-        elif cell.update and self.down(cell=cell) and second and self.down(cell=second).state == 0:
-            self.swap(cell, self.down(cell=second))
-            self.down(cell=second).update = False
-
-        # waterlogging
-        elif self.down(cell=cell) and self.down(cell=cell).state == 2:
-            self.swap(cell, self.down(cell=cell))
-        elif cell.update and self.down(cell=cell) and first and self.down(cell=first).state == 2:
-            self.swap(cell, self.down(cell=first))
-            self.down(cell=first).update = False
-        elif cell.update and self.down(cell=cell) and second and self.down(cell=second).state == 2:
-            self.swap(cell, self.down(cell=second))
-            self.down(cell=second).update = False
+        if self.down(cell) and self.down(cell).state == AIR:
+            self.swap(cell, self.down(cell))
+        else:
+            n: tuple[Cell] = neighbours(cell, self, 3, True)
+            for current in n:
+                if current.state == WATER:
+                    cell.state = WETWOOD
+                    current.state = AIR
+                    return
 
     def handle_fire(self, cell):
-        ...
+        n: tuple[Cell] = neighbours(cell, self, 5, True)
+        if all(cell.state in (AIR, FIRE) for cell in n): # fire is surrounded by air or fire
+            if random.random() < 0.2:
+                cell.state = AIR
+                return
+            if self.up(cell) and cell.update and self.up(cell).state == AIR:
+                self.swap(cell, self.up(cell))
+                self.up(cell).update = False
+
+        for current in n: # else,
+            if random.random() < 0.01: 
+                if current.state == DRYWOOD:
+                    current.state = FIRE
+                if current.state == WETWOOD:
+                    current.state = DRYWOOD
+                    cell.state = STEAM
+
+            # if random.random() < 0.9 and current.state == gunpowder AND fuse
 
     def handle_lava(self, cell):
         ...
@@ -588,51 +586,51 @@ class Grid:
 
                 on_pointer = (element.row == self.pointer_y and element.col == self.pointer_x)
                 if on_pointer and self.show_pointer:
-                    if element.state == 0:
+                    if element.state in (AIR, FIRE):
                         grid += color("⊹", hsv=(HUE, 100, 100))
                         # grid += "◌"⊹
-                    elif element.state in (1, 5):
+                    elif element.state in (SAND, STEAM, DRYWOOD):
                         grid += color("◇", hsv=(HUE, 100, 100))
                         # grid += "○"◇
-                    elif element.state in (2, 4):
+                    elif element.state in (WATER, ACID, LAVA):
                         grid += color("◈", hsv=(HUE, 100, 100))
                         # grid += "●"◈
-                    elif element.state == 3:
+                    elif element.state in (STEEL, WETWOOD, OBSIDIAN):
                         grid += color("◆", hsv=(HUE, 100, 100))
                         # grid += "◉"◆
                 else:
-                    if element.state == 0:
+                    if element.state == AIR:
                         grid += color("∙", rgb=(15, 15, 15))
                         # grid += "∙"
-                    elif element.state == 1:
+                    elif element.state == SAND:
                         grid += color("▩", hsv=self.color_depth_variance(element, (element.get_sand_hue(self.height, self.length) % 360, 36, 80)))
                         # grid += "▩"
-                    elif element.state == 2:
+                    elif element.state == WATER:
                         grid += color("■", hsv=self.color_depth_variance(element, (215, 78, 100)))
                         # grid += "■"
-                    elif element.state == 3:
+                    elif element.state == STEEL:
                         grid += color("◙", hsv=self.color_depth_variance(element, (0, 0, 54)))
                         # grid += "◙"
-                    elif element.state == 4:
+                    elif element.state == ACID:
                         grid += color("■", hsv=self.color_depth_variance(element, (80, 100, 100)))
                         # grid += "■"
-                    elif element.state == 5:
+                    elif element.state == STEAM:
                         grid += color("▩", hsv=self.color_depth_variance(element, (80, 2, 40)))
                         # grid += "▩"
-                    elif element.state == 6:
+                    elif element.state == DRYWOOD:
                         grid += color("▩", hsv=self.color_depth_variance(element, (28, 51, 46)))
                         # grid += "▩"
-                    elif element.state == 7:
+                    elif element.state == WETWOOD:
                         grid += color("◙", hsv=self.color_depth_variance(element, (24, 79, 25)))
                         # grid += "◙"
-                    elif element.state == 8:
+                    elif element.state == FIRE:
                         grid += color("●", hsv=self.color_depth_variance(element, (50, 100, 100)))
                         # grid += "●"
-                    elif element.state == 9:
+                    elif element.state == LAVA:
                         grid += color("■", hsv=self.color_depth_variance(element, (17, 100, 100)))
                         # grid += "■"
-                    elif element.state == 10:
-                        grid += color("◙", hsv=self.color_depth_variance(element, (250, 100, 25)))
+                    elif element.state == OBSIDIAN:
+                        grid += color("◙", hsv=self.color_depth_variance(element, (250, 70, 70)))
                         # grid += "◙"
                 grid += " "
             if extra and rownum != 0 and rownum < len(extra) + 1:
@@ -642,6 +640,32 @@ class Grid:
         sys.stdout.write(grid)
         sys.stdout.write("═"*2*self.length + "\n")
         sys.stdout.flush()
+
+def neighbours(cell: Cell, grid: Grid, method, filter=False):
+    if method == 1: # sides
+        n = (grid.left(cell), grid.right(cell))
+    elif method == 2: # up-down
+        n = (grid.up(cell), grid.down(cell))
+    elif method == 3: # all four
+        n = (grid.up(cell), grid.down(cell), grid.left(cell), grid.right(cell))
+    elif method == 4: # triangle
+        d = grid.down(cell)
+        n = (grid.up(cell), grid.down(cell), grid.left(cell), grid.right(cell), grid.left(d), grid.right(d))
+    elif method == 5: # all 8 with diagonals
+        d = grid.down(cell)
+        u = grid.up(cell)
+        n = (u, d, grid.left(cell), grid.right(cell), grid.left(d), grid.right(d), grid.left(u), grid.right(u))
+    elif method == 6: # diagonals only
+        d = grid.down(cell)
+        u = grid.up(cell)
+        n = (grid.left(d), grid.right(d), grid.left(u), grid.right(u))
+    else:
+        raise ValueError("Method out of bounds.")
+
+    if not filter:
+        return n
+    else:
+        return tuple(i for i in n if i)
 
 def get_dist(cell1: Cell, cell2: Cell) -> tuple[int]:
     xdist = abs(cell1.col - cell2.col)
