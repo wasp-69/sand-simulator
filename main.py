@@ -5,7 +5,7 @@ from colorsys import hsv_to_rgb
 import math
 from collections import deque
 
-AIR, SAND, WATER, STEEL, ACID, STEAM, DRYWOOD, WETWOOD, FIRE, LAVA, OBSIDIAN = 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+AIR, SAND, WATER, STEEL, ACID, STEAM, DRYWOOD, WETWOOD, FIRE, LAVA, OBSIDIAN, GUNPOWDER, FUSE, URANIUM = 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13
 
 class Cell:
 
@@ -181,9 +181,13 @@ class Grid:
                 elif cell.state == FIRE:
                     self.handle_fire(cell)
                 elif cell.state == LAVA:
-                    ...
+                    self.handle_lava(cell)
                 elif cell.state == OBSIDIAN:
-                    ...
+                    self.handle_obsidian(cell)
+                elif cell.state == GUNPOWDER:
+                    self.handle_gunpowder(cell)
+                elif cell.state == FUSE:
+                    self.handle_fuse(cell)
                 # sleep(1)
 
     def handle_sand(self, cell: Cell):
@@ -288,13 +292,13 @@ class Grid:
                 return
 
         # normal gravity
-        if self.up(cell=cell) and cell.update and self.up(cell=cell).state in (0, 1, 2, 4):
+        if self.up(cell=cell) and cell.update and self.up(cell=cell).state in (0, 1, 2, 4, FIRE):
             self.swap(cell, self.up(cell=cell))
             self.up(cell=cell).update = False # potentially breaking
-        elif cell.update and self.up(cell=cell) and first and self.up(cell=first).state in (0, 1, 2, 4):
+        elif cell.update and self.up(cell=cell) and first and self.up(cell=first).state in (0, 1, 2, 4, FIRE):
             self.swap(cell, self.up(cell=first))
             self.up(cell=first).update = False
-        elif cell.update and self.up(cell=cell) and second and self.up(cell=second).state in (0, 1, 2, 4):
+        elif cell.update and self.up(cell=cell) and second and self.up(cell=second).state in (0, 1, 2, 4, FIRE):
             self.swap(cell, self.up(cell=second))
             self.up(cell=second).update = False
         elif cell.update and first and first.state == 0:
@@ -306,7 +310,7 @@ class Grid:
 
     def handle_drywood(self, cell):
         # for normal gravity 
-        if self.down(cell) and self.down(cell).state == AIR:
+        if self.down(cell) and self.down(cell).state in (AIR, STEAM, FIRE):
             self.swap(cell, self.down(cell))
         else:
             n: tuple[Cell] = neighbours(cell, self, 3, True)
@@ -318,7 +322,9 @@ class Grid:
 
     def handle_fire(self, cell):
         n: tuple[Cell] = neighbours(cell, self, 5, True)
-        if all(cell.state in (AIR, FIRE) for cell in n): # fire is surrounded by air or fire
+        not_flammables = (AIR, WATER, STEEL, SAND, ACID, STEAM, FIRE, LAVA, OBSIDIAN)
+
+        if all(cell.state in not_flammables for cell in n): # fire is surrounded by non-flammable materials
             if random.random() < 0.2:
                 cell.state = AIR
                 return
@@ -327,21 +333,99 @@ class Grid:
                 self.up(cell).update = False
 
         for current in n: # else,
-            if random.random() < 0.01: 
-                if current.state == DRYWOOD:
+            if current.state == WATER:
+                cell.state = STEAM
+                current.state = AIR
+            elif current.state in (FUSE, GUNPOWDER) and cell.update:
+                current.state = FIRE
+                current.update = False
+            elif random.random() < 0.01: 
+                if current.state == DRYWOOD and cell.update:
                     current.state = FIRE
-                if current.state == WETWOOD:
+                    current.update = False
+                if current.state == WETWOOD and cell.update:
                     current.state = DRYWOOD
                     cell.state = STEAM
+                    current.update = False
 
-            # if random.random() < 0.9 and current.state == gunpowder AND fuse
+            # if current.state == gunpowder AND fuse
 
     def handle_lava(self, cell):
-        ...
+        global FRAMENUM
+
+        if FRAMENUM%3 == 0:
+            if random.random() < 0.05:
+                above = self.up(cell)
+                if above and above.state == AIR:
+                    above.state = FIRE
+            n: tuple[Cell] = neighbours(cell, self, 5, True)
+
+            for nearby in n:
+                if nearby.state == SAND and random.random() < 0.15:
+                    nearby.state = LAVA
+                elif nearby.state == WATER:
+                    nearby.state = AIR
+                    cell.state = OBSIDIAN
+                elif nearby.state == STEEL:
+                    nearby.state = AIR
+                elif nearby.state == ACID:
+                    for i in n:
+                        i.state = FIRE
+                    cell.state == AIR
+                elif nearby.state == STEAM:
+                    nearby.state = AIR
+                elif nearby.state in (DRYWOOD, GUNPOWDER, FUSE) and random.random() < 0.075:
+                    nearby.state = FIRE
+                elif nearby.state == WETWOOD and random.random() < 0.05:
+                    nearby.state = FIRE
+                    if random.random() < 0.5:
+                        cell.state = AIR
+            below = self.down(cell)
+            if below and below.state == FIRE:
+                self.swap(cell, below)
+            self.handle_water(cell)
 
     def handle_obsidian(self, cell):
-        ...
+        w = 0
+        for i in range(1, min(16, cell.row + 1)):
+            above = self.up(cell, i).state
+            if above in (AIR, OBSIDIAN, FIRE, STEAM, STEEL, DRYWOOD, FUSE):
+                break
+            elif above in (SAND, GUNPOWDER):
+                w += 2
+            elif above == WATER:
+                w += 1
+            elif above == ACID:
+                w += 1
+            elif above == DRYWOOD:
+                w += 3
+            elif above == LAVA:
+                w += 3
+
+        if w > 20:
+            cell.state = AIR
+
+    def handle_gunpowder(self, cell):
+        n: tuple[Cell] = neighbours(cell, self, 5, True)
+
+        for nearby in n:
+            if nearby.state == WATER:
+                cell.state = DRYWOOD
+                nearby.state = AIR
+            elif nearby.state == LAVA:
+                cell.state = FIRE
+        self.handle_sand(cell)
         
+    def handle_fuse(self, cell):
+        n: tuple[Cell] = neighbours(cell, self, 5, True)
+
+        for nearby in n:
+            if nearby.state == WATER:
+                cell.state = DRYWOOD
+                nearby.state = AIR
+            elif nearby.state == LAVA:
+                cell.state = FIRE
+
     def handle_pointer(self, key):
         if key == "w":
             self.pointer_y = (self.pointer_y - 1) % self.height
@@ -589,13 +673,13 @@ class Grid:
                     if element.state in (AIR, FIRE):
                         grid += color("⊹", hsv=(HUE, 100, 100))
                         # grid += "◌"⊹
-                    elif element.state in (SAND, STEAM, DRYWOOD):
+                    elif element.state in (SAND, STEAM, DRYWOOD, GUNPOWDER):
                         grid += color("◇", hsv=(HUE, 100, 100))
                         # grid += "○"◇
                     elif element.state in (WATER, ACID, LAVA):
                         grid += color("◈", hsv=(HUE, 100, 100))
                         # grid += "●"◈
-                    elif element.state in (STEEL, WETWOOD, OBSIDIAN):
+                    elif element.state in (STEEL, WETWOOD, OBSIDIAN, FUSE):
                         grid += color("◆", hsv=(HUE, 100, 100))
                         # grid += "◉"◆
                 else:
@@ -631,6 +715,12 @@ class Grid:
                         # grid += "■"
                     elif element.state == OBSIDIAN:
                         grid += color("◙", hsv=self.color_depth_variance(element, (250, 70, 70)))
+                        # grid += "◙"
+                    elif element.state == GUNPOWDER:
+                        grid += color("▩", hsv=self.color_depth_variance(element, (5, 0, 5)))
+                        # grid += "▩"
+                    elif element.state == FUSE:
+                        grid += color("◙", hsv=self.color_depth_variance(element, (55, 80, 20)))
                         # grid += "◙"
                 grid += " "
             if extra and rownum != 0 and rownum < len(extra) + 1:
@@ -786,7 +876,7 @@ def main():
     MAX_BRUSH_SIZE = 7 # [default: 7]
     DEFAULT_BRUSH_SIZE = 1
 
-    FRAMERATE = 50 # decrease if experiencing stutter [default: 50]
+    FRAMERATE = 60 # decrease if experiencing stutter [default: 60]
     FRAMENUM = 0
 
     HUE = 0
@@ -804,7 +894,7 @@ def main():
 
     last_key = None # debug
 
-    elements = {0: "Air", 1: "Sand", 2: "Water", 3: "Steel", 4: "Acid", 5: "Steam", 6: "Dry Wood", 7: "Wet Wood", 8: "Fire", 9: "Lava", 10: "Obsidian"}
+    elements = {0: "Air", 1: "Sand", 2: "Water", 3: "Steel", 4: "Acid", 5: "Steam", 6: "Dry Wood", 7: "Wet Wood", 8: "Fire", 9: "Lava", 10: "Obsidian", 11: "Gunpowder", 12: "Fuse"}
     gravity_set = {"up": "↧", "down": "↥", "left": "↦", "right": "↤"}
     pause_set = {False: "▢", True: "▶"}
     shapes_set = {0: "Solid Square", 1: "Hollow Square", 2: "Solid Circle", 3: "Hollow Circle", 4: "Solid Diamond", 5: "Hollow Diamond", 6: "Horizontal Line", 7: "Vertical Line", 8: "Primary Diagonal", 9: "Secondary Diagonal", 10: "Fill Tool"}
