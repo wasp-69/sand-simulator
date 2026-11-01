@@ -1,11 +1,24 @@
 import sys
 import random
-from time import sleep
+from time import sleep, perf_counter
 from colorsys import hsv_to_rgb
 import math
 from collections import deque
 
 AIR, SAND, WATER, STEEL, ACID, STEAM, DRYWOOD, WETWOOD, FIRE, LAVA, OBSIDIAN, GUNPOWDER, FUSE, URANIUM = 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13
+
+class Timer:
+
+    def __init__(self):
+        self.starting_time = perf_counter()
+        self.current_time = perf_counter()
+
+    def reset(self):
+        self.starting_time = perf_counter()
+
+    def diff(self):
+        self.current_time = perf_counter()
+        return self.current_time - self.starting_time
 
 class Cell:
 
@@ -154,6 +167,7 @@ class Grid:
             return False
 
     def update(self):
+        self.reset_update_flags()
         if self.orientation == "up":
             matrixrange = (range(0, self.length), range(self.height-1, -1, -1))
         elif self.orientation == "down":
@@ -252,19 +266,22 @@ class Grid:
         # for acid dissoulution
         n: tuple[Cell] = neighbours(cell, self, 3, True)
 
-        for current in n:
-            if current.state == SAND: # sand
+        for nearby in n:
+            if nearby.state == SAND: # sand
                 cell.state = AIR
-                current.state = AIR
-            elif current.state == WATER: # water
+                nearby.state = AIR
+            elif nearby.state == WATER: # water
                 cell.state = AIR
-                current.state = STEAM
-            elif current.state == DRYWOOD: # dry wood
+                nearby.state = STEAM
+            elif nearby.state == DRYWOOD: # dry wood
                 cell.state = AIR
-                current.state = FIRE
-            elif current.state == WETWOOD: # wet wood
+                nearby.state = FIRE
+            elif nearby.state == WETWOOD: # wet wood
                 cell.state = AIR
-                current.state = STEAM
+                nearby.state = STEAM
+            elif nearby.state in (GUNPOWDER, FUSE):
+                if random.random() < 0.5:
+                    nearby.state = FIRE
 
         # for normal gravity 
         if self.down(cell) and self.down(cell).state == AIR:
@@ -314,10 +331,10 @@ class Grid:
             self.swap(cell, self.down(cell))
         else:
             n: tuple[Cell] = neighbours(cell, self, 3, True)
-            for current in n:
-                if current.state == WATER:
+            for nearby in n:
+                if nearby.state == WATER:
                     cell.state = WETWOOD
-                    current.state = AIR
+                    nearby.state = AIR
                     return
 
     def handle_fire(self, cell):
@@ -371,7 +388,7 @@ class Grid:
                 elif nearby.state == ACID:
                     for i in n:
                         i.state = FIRE
-                    cell.state == AIR
+                    cell.state = AIR
                 elif nearby.state == STEAM:
                     nearby.state = AIR
                 elif nearby.state in (DRYWOOD, GUNPOWDER, FUSE) and random.random() < 0.075:
@@ -911,14 +928,20 @@ def main():
     f"Simulation: ( {pause_set[PAUSED]} )"
 ])
 
+    timer = Timer()
     # main loop 
     while True:
         pressed_key = get_keypress()
+        ticked = False
 
-        if not PAUSED:
+        if not PAUSED and timer.diff() > (1/FRAMERATE):
             grid.record_undo()
             grid.update()
-        grid.reset_update_flags()
+            timer.reset()
+            HUE += HUE_CHANGE
+            FRAMENUM += 1
+            ticked = True
+
         grid.handle_pointer(pressed_key)
         grid.handle_action(pressed_key)
         grid.handle_brush_attributes(pressed_key, elements, shapes_set)
@@ -942,17 +965,17 @@ def main():
         else:
             last_key = pressed_key # - debug
 
-        grid.show(extra=[   
-    f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}]   ",
-    f"Brush: <{grid.brush_size}px> ({elements[grid.brush_type]}) [{shapes_set[grid.brush_shape]}]                   ",
-    f"Frame Rate: [{FRAMERATE}]   ",
-    f"Gravity: [ {gravity_set[grid.orientation]} ]   ",
-    f"Simulation: ( {pause_set[PAUSED]} )   ", f"DEBUG: {last_key}               "
-])
-
-        HUE += HUE_CHANGE
-        FRAMENUM += 1
-        sleep(1/FRAMERATE)
+        if ticked or pressed_key is not None:
+            grid.show(extra=[   
+        f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}]   ",
+        f"Brush: <{grid.brush_size}px> ({elements[grid.brush_type]}) [{shapes_set[grid.brush_shape]}]                   ",
+        f"Frame Rate: [{FRAMERATE}]   ",
+        f"Gravity: [ {gravity_set[grid.orientation]} ]   ",
+        f"Simulation: ( {pause_set[PAUSED]} )   ", f"DEBUG: {last_key}               "
+    ])
+        else:
+            sleep(0.002)
+        # sleep(1/FRAMERATE)
 
 
 if __name__ == "__main__":
