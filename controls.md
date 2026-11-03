@@ -26,4 +26,5 @@
 
 - `Shift + C` to **clear** the entire sandbox.
 - `` ` `` to stop **cursor RGB**.
+- `/` to turn off radiation visuals.
 - `?secret code?` for an **easter egg**!
