@@ -40,7 +40,7 @@ class Cell:
             return (avg * 360 ) + HUE 
 
     def is_static(self):
-        return self.state in (STEEL, WETWOOD, OBSIDIAN)
+        return self.state in (STEEL, WETWOOD, OBSIDIAN, FUSE)
 
 class Grid:
 
@@ -216,7 +216,6 @@ class Grid:
                     self.handle_fuse(cell)
                 elif cell.state == URANIUM:
                     self.handle_uranium(cell)
-                # sleep(1)
 
     def handle_sand(self, cell: Cell):
         if random.randint(0,1):
@@ -300,6 +299,12 @@ class Grid:
             elif nearby.state in (GUNPOWDER, FUSE):
                 if random.random() < 0.5:
                     nearby.state = FIRE
+            elif nearby.state == URANIUM:
+                if nearby.uraniumdecaystage > 7:
+                    nearby.uraniumdecaystage = 0
+                    cell.state = WATER
+                    return
+                    
 
         # for normal gravity 
         if self.down(cell) and self.down(cell).state == AIR:
@@ -312,7 +317,7 @@ class Grid:
             self.swap(cell, second)
             second.update = False
 
-    def handle_steam(self, cell):
+    def handle_steam(self, cell: Cell):
         if random.randint(0,1):
             first = self.left(cell)
             second = self.right(cell)
@@ -321,25 +326,25 @@ class Grid:
             second = self.left(cell)
 
         # condensation
-        if (self.up(cell) is None) or (self.up(cell) and self.up(cell).state == 3):
+        if (self.up(cell) is None) or (self.up(cell).is_static()):
             if random.random() < 0.01:
-                cell.state = 2
+                cell.state = WATER
                 return
 
         # normal gravity
-        if self.up(cell=cell) and cell.update and self.up(cell=cell).state in (0, 1, 2, 4, FIRE, GUNPOWDER, URANIUM):
-            self.swap(cell, self.up(cell=cell))
-            self.up(cell=cell).update = False # potentially breaking
-        elif cell.update and self.up(cell=cell) and first and self.up(cell=first).state in (0, 1, 2, 4, FIRE, GUNPOWDER, URANIUM):
-            self.swap(cell, self.up(cell=first))
-            self.up(cell=first).update = False
-        elif cell.update and self.up(cell=cell) and second and self.up(cell=second).state in (0, 1, 2, 4, FIRE, GUNPOWDER, URANIUM):
-            self.swap(cell, self.up(cell=second))
-            self.up(cell=second).update = False
-        elif cell.update and first and first.state == 0:
+        if self.up(cell) and cell.update and self.up(cell).state in (AIR, SAND, WATER, ACID, FIRE, GUNPOWDER, URANIUM):
+            self.swap(cell, self.up(cell))
+            self.up(cell).update = False # potentially breaking
+        elif cell.update and self.up(cell) and first and self.up(first).state in (AIR, SAND, WATER, ACID, FIRE, GUNPOWDER, URANIUM):
+            self.swap(cell, self.up(first))
+            self.up(first).update = False
+        elif cell.update and self.up(cell) and second and self.up(second).state in (AIR, SAND, WATER, ACID, FIRE, GUNPOWDER, URANIUM):
+            self.swap(cell, self.up(second))
+            self.up(second).update = False
+        elif cell.update and first and first.state == AIR:
             self.swap(cell, first)
             first.update = False
-        elif cell.update and second and second.state == 0:
+        elif cell.update and second and second.state == AIR:
             self.swap(cell, second)
             second.update = False
 
@@ -382,8 +387,6 @@ class Grid:
                     current.state = DRYWOOD
                     cell.state = STEAM
                     current.update = False
-
-            # if current.state == gunpowder AND fuse
 
     def handle_lava(self, cell):
         global FRAMENUM
@@ -431,7 +434,7 @@ class Grid:
             above_cell = self.up(cell, i)
             if not above_cell:
                 break
-            above = above.state
+            above = above_cell.state
             if above in (AIR, OBSIDIAN, FIRE, STEAM, STEEL, WETWOOD, FUSE):
                 break
             elif above in (SAND, GUNPOWDER):
@@ -491,15 +494,12 @@ class Grid:
 
                 if hit_cell.state == OBSIDIAN: # sheilding effect of obsidian
                     break
-                if random.random() < 0.2: # random chance to have a reaction happen
+                if random.random() < 0.2 / (1 + dist / 10): # random chance to have a reaction happen
                     if hit_cell.state == WATER:
                         hit_cell.state = ACID
                         cell.uraniumdecaystage += 1
                     elif hit_cell.state == STEEL:
                         hit_cell.state = SAND
-                        cell.uraniumdecaystage += 1
-                    elif hit_cell.state == WETWOOD:
-                        hit_cell.state = STEAM
                         cell.uraniumdecaystage += 1
                     elif hit_cell.state == DRYWOOD:
                         hit_cell.state = FIRE
@@ -734,6 +734,15 @@ class Grid:
                 c.state = states[i]
                 i += 1
 
+    def handle_shuffle(self, key):
+        if key != 'tab':
+            return
+        for x in range(0, self.length):
+            for y in range(0, self.height):
+                this = self.matrix[y][x]
+                other = random.choice(random.choice(self.matrix))
+                self.swap(this, other)
+
     def color_depth_variance(self, cell, hsv: tuple):
         global DYNAMIC_LIGHTING 
         if not DYNAMIC_LIGHTING or cell.state in (FIRE, LAVA):
@@ -818,21 +827,30 @@ class Grid:
                 
     def show(self, extra=0):
         global HUE
-        grid = ""
+        grid = "╔" + ("═"*(2*self.length+1)) + "╗" + "\n"
+        span = max_len(extra)+6
 
         for rownum, row in enumerate(self.matrix):
+            grid += "║ "
             for element in row:
 
                 symbol, clr = self.display(element)
                 grid += color(symbol, clr)
-
                 grid += " "
-            if extra and rownum != 0 and rownum < len(extra) + 1:
-                grid += "               │   " + extra[rownum-1]
-            grid += "\n"
-        sys.stdout.write("\033[H")
+
+            if rownum == 1:
+                grid += "║               " + "╭" + "─" * span + "╮          " + "\n"
+            elif rownum == len(extra) + 1:
+                grid += "║               " + "╰" + "─" * span + "╯          " + "\n"
+            elif extra and rownum != 0 and rownum < len(extra) + 1:
+                grid += "║               │   " + extra[rownum-1] + " " * (span-len(extra[rownum-1])-3) + "│          "
+                grid += "\n"
+            else:
+                grid += "║\n"
+        reset_terminal_cursor_pos()
         sys.stdout.write(grid)
-        sys.stdout.write("═"*2*self.length + "\n")
+        sys.stdout.write("╚" + ("═"*(2*self.length+1)) + "╝")
+        sys.stdout.write("\n")
         sys.stdout.flush()
         self.reset_radiation_flags()
 
@@ -887,6 +905,13 @@ def get_dist(cell1: Cell, cell2: Cell, direct=False) -> tuple[int]:
         return xdist + ydist
     return (xdist, ydist)
 
+def max_len(iter: list) -> int:
+    maxlen = 0
+    for item in iter:
+        if len(item) > maxlen:
+            maxlen = len(item)
+    return maxlen
+
 def average(*args):
     s = 0
     for num in args:
@@ -917,7 +942,7 @@ def handle_framerate(key):
 
     if not PAUSED:
         if key == "]":
-            FRAMERATE = min(100, FRAMERATE + 1)
+            FRAMERATE = min(500, FRAMERATE + 1)
         elif key == "[":
             FRAMERATE = max(1, FRAMERATE - 1)
 
@@ -987,6 +1012,21 @@ def get_keypress():
         
         return decoded
 
+def hide_terminal_cursor():
+    sys.stdout.write("\033[?25l")
+
+def show_terminal_cursor():
+    sys.stdout.write("\033[?25h")
+
+def wipe_terminal_screen():
+    sys.stdout.write("\033[H\033[2J")
+
+def clear_terminal_line():
+    sys.stdout.write("\033[2K")
+
+def reset_terminal_cursor_pos():
+    sys.stdout.write("\033[H")
+
 def main():
     global FRAMENUM, FRAMERATE, DYNAMIC_LIGHTING, \
         PAUSED, UNDO_LIST, MAX_UNDO, \
@@ -1012,29 +1052,28 @@ def main():
     RAINBOW_SAND = False
     RBS_COUNTER = 0
 
-    MAX_UNDO = 10000 # the max cap of undo recordings, set this to low if experience performance issues [default: 1000]
+    MAX_UNDO = 1000 # the max cap of undo recordings, set this to low if experience performance issues [default: 1000]
     UNDO_LIST = deque(maxlen=MAX_UNDO) 
-
-    last_key = None # debug
 
     elements = {0: "Air", 1: "Sand", 2: "Water", 3: "Steel", 4: "Acid", 5: "Steam", 6: "Dry Wood", 7: "Wet Wood", 8: "Fire", 9: "Lava", 10: "Obsidian", 11: "Gunpowder", 12: "Fuse", 13: "Uranium"}
     gravity_set = {"up": "↧", "down": "↥", "left": "↦", "right": "↤"}
     pause_set = {False: "▢", True: "▶"}
     shapes_set = {0: "Solid Square", 1: "Hollow Square", 2: "Solid Circle", 3: "Hollow Circle", 4: "Solid Diamond", 5: "Hollow Diamond", 6: "Horizontal Line", 7: "Vertical Line", 8: "Primary Diagonal", 9: "Secondary Diagonal", 10: "Fill Tool"}
 
-    sys.stdout.write("\033[H\033[2J")
-    sys.stdout.write("\033[?25l")
-    sys.stdout.write("\033[2K")
+    wipe_terminal_screen()
+    hide_terminal_cursor()
+    clear_terminal_line()
     grid = Grid(L,B)
     grid.show(extra=[   
     f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}]",
-    f"Brush: <{grid.brush_size}px> ({elements[grid.brush_type]}) [{shapes_set[grid.brush_shape]}]                        ", 
+    f"Brush: <{grid.brush_size}px> ({elements[grid.brush_type]}) [{shapes_set[grid.brush_shape]}]", 
     f"Frame Rate: [{(FRAMERATE):.0f}]",
     f"Gravity: [ {gravity_set[grid.orientation]} ]",
     f"Simulation: ( {pause_set[PAUSED]} )"
 ])
 
     timer = Timer()
+
     # main loop 
     while True:
         pressed_key = get_keypress()
@@ -1054,6 +1093,7 @@ def main():
         grid.handle_orientation(pressed_key)
         grid.handle_clear(pressed_key)
         grid.handle_paused(pressed_key)
+        grid.handle_shuffle(pressed_key)
 
         handle_RBS(pressed_key)
         handle_framerate(pressed_key)
@@ -1068,18 +1108,13 @@ def main():
         if pressed_key == "/":
             grid.show_radiation_lines = not grid.show_radiation_lines
 
-        if pressed_key is None: # debug -
-            pass
-        else:
-            last_key = pressed_key # - debug
-
         if ticked or pressed_key is not None:
             grid.show(extra=[   
-        f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}]   ",
-        f"Brush: <{grid.brush_size}px> ({elements[grid.brush_type]}) [{shapes_set[grid.brush_shape]}]                   ",
-        f"Frame Rate: [{FRAMERATE}]   ",
-        f"Gravity: [ {gravity_set[grid.orientation]} ]   ",
-        f"Simulation: ( {pause_set[PAUSED]} )   ", f"DEBUG: {last_key}               "
+        f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}]",
+        f"Brush: <{grid.brush_size}px> ({elements[grid.brush_type]}) [{shapes_set[grid.brush_shape]}]",
+        f"Frame Rate: [{FRAMERATE}]",
+        f"Gravity: [ {gravity_set[grid.orientation]} ]",
+        f"Simulation: ( {pause_set[PAUSED]} )"
     ])
         else:
             sleep(0.002)
@@ -1087,6 +1122,10 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
-    sys.stdout.write("\033[?25h")
+    try:
+        main()
+    except KeyboardInterrupt:
+        hide_terminal_cursor()
+    finally:
+        hide_terminal_cursor()
 # master
