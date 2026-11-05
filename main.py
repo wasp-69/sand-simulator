@@ -29,6 +29,7 @@ class Cell:
         self.update = True
         self.uraniumdecaystage = 0
         self.contaminated = False
+        self.light_level = 100
 
     def get_sand_hue(self, height, length):
         global RAINBOW_SAND, HUE
@@ -41,6 +42,12 @@ class Cell:
 
     def is_static(self):
         return self.state in (STEEL, WETWOOD, OBSIDIAN, FUSE)
+
+    def is_edge(self, ignore_top = True):
+        if ignore_top:
+            return (self.col == 0 or self.col == 30 or self.row == 30)
+        else:
+            return (self.col == 0 or self.col == 30 or self.row == 30 or self.row == 0)
 
 class Grid:
 
@@ -65,6 +72,8 @@ class Grid:
 
         self.matrix = [[Cell(row=row, col=col) for col in range(length)]
                        for row in range(height)]
+        self.edges = self.get_edges()                                      # except the top one
+        self.bounds = self.get_edges(True)
 
     def swap(self, cell1: Cell, cell2: Cell):
         cell1.state, cell2.state = cell2.state, cell1.state
@@ -79,6 +88,11 @@ class Grid:
         for x in range(0, self.length):
             for y in range(0, self.height):
                 self.matrix[y][x].contaminated = False
+
+    def reset_light_levels(self):
+        for x in range(0, self.length):
+            for y in range(0, self.height):
+                self.matrix[y][x].light_level = 30
 
     def up(self, cell, n: int = 1, static = False):
         if not cell:
@@ -280,22 +294,24 @@ class Grid:
         n: tuple[Cell] = neighbours(cell, self, 3, True)
 
         for nearby in n:
-            if nearby.state == SAND: # sand
+            if nearby.state == SAND:
                 cell.state = AIR
                 nearby.state = AIR
                 return
-            elif nearby.state == WATER: # water
+            elif nearby.state == WATER:
                 cell.state = AIR
                 nearby.state = STEAM
                 return
-            elif nearby.state == DRYWOOD: # dry wood
+            elif nearby.state == DRYWOOD:
                 cell.state = AIR
                 nearby.state = FIRE
                 return
-            elif nearby.state == WETWOOD: # wet wood
+            elif nearby.state == WETWOOD:
                 cell.state = AIR
                 nearby.state = STEAM
                 return
+            elif nearby.state == FIRE:
+                nearby.state = AIR
             elif nearby.state in (GUNPOWDER, FUSE):
                 if random.random() < 0.5:
                     nearby.state = FIRE
@@ -396,16 +412,16 @@ class Grid:
                 above = self.up(cell)
                 if above and above.state == AIR:
                     above.state = FIRE
-            n: tuple[Cell] = neighbours(cell, self, 5, True)
+            n: tuple[Cell] = neighbours(cell, self, 3, True)
 
             for nearby in n:
-                if nearby.state == SAND and random.random() < 0.15:
-                    nearby.state = LAVA
+                if nearby.state == SAND:
+                    nearby.state = AIR
                 elif nearby.state == WATER:
                     nearby.state = AIR
                     cell.state = OBSIDIAN
                     return
-                elif nearby.state == STEEL:
+                elif nearby.state == STEEL and random.random() < 0.15:
                     nearby.state = AIR
                 elif nearby.state == ACID:
                     for i in n:
@@ -494,6 +510,7 @@ class Grid:
 
                 if hit_cell.state == OBSIDIAN: # sheilding effect of obsidian
                     break
+
                 if random.random() < 0.2 / (1 + dist / 10): # random chance to have a reaction happen
                     if hit_cell.state == WATER:
                         hit_cell.state = ACID
@@ -743,21 +760,68 @@ class Grid:
                 other = random.choice(random.choice(self.matrix))
                 self.swap(this, other)
 
-    def color_depth_variance(self, cell, hsv: tuple):
+    def get_edges(self, top=False):
+        edges = []
+
+
+        edges.extend(self.matrix[-1])
+        if top:
+            edges.extend(self.matrix[0])
+
+        for y in range(1, self.height - 1):
+            edges.append(self.matrix[y][0])
+            edges.append(self.matrix[y][-1])
+
+        return edges
+
+    def color_depth_variance(self, cell, hsv: tuple): # TO REWORK ENTIRELY
         global DYNAMIC_LIGHTING 
         if not DYNAMIC_LIGHTING or cell.state in (FIRE, LAVA):
             return hsv
         
         h, s, v = hsv
 
-        for i in range(1, min(16, cell.row + 1)):
-            above = self.matrix[cell.row - i][cell.col].state
-            if above in (WATER, ACID):    # translucent
-                v -= 5
-            elif above in (SAND, STEEL, OBSIDIAN, GUNPOWDER, URANIUM, FUSE, DRYWOOD, WETWOOD):  # opaque
-                v -= 7
+        v *= (cell.light_level * 0.01)
+        
+        return (h, s, max(15 , v))
 
-        return (h, s, max(20 , v))
+    def DO_NOT_shoot_a_light_ray_in_all_directions_and_illuminate_the_cells_that_it_hits(self, cell):
+        n: tuple[Cell] = neighbours(cell, self, 7, True)
+        for current in n:
+            current.light_level += (10 - get_dist(cell, current, True))//1.3
+
+    def dynamic_lights(self):
+        global DYNAMIC_LIGHTING, BULB_POS
+        if not DYNAMIC_LIGHTING:
+            return
+
+        solids = [SAND, STEEL, DRYWOOD, WETWOOD, OBSIDIAN, GUNPOWDER, FUSE, URANIUM]
+        fluids = [WATER, ACID, STEAM]
+        lights = [FIRE, LAVA]
+
+        bulb = BULB_POS
+        max_light = 100
+
+        for edge_cell in self.edges: # for every cell that is on the edge,
+            prev_light = max_light
+            for current in DDA_line(bulb[0], bulb[1], edge_cell.col, edge_cell.row): # make a ray from bulb to that specific edge cell and traverse it
+                x, y = current
+
+                if not (0 <= x < self.length and 0 <= y < self.height):
+                    continue
+
+                current_cell = self.matrix[y][x]
+
+                if current_cell.state in solids:
+                    prev_light -= 7
+                elif current_cell.state in fluids:
+                    prev_light -= 4
+                elif current_cell.state == AIR:
+                    prev_light -= 0.5
+                elif current_cell.state in lights and current_cell.light_level < 90:
+                    self.DO_NOT_shoot_a_light_ray_in_all_directions_and_illuminate_the_cells_that_it_hits(current_cell)
+
+                current_cell.light_level = max(0, prev_light)           
     
     def display(self, cell: Cell):
         global HUE
@@ -827,8 +891,10 @@ class Grid:
                 
     def show(self, extra=0):
         global HUE
+        self.dynamic_lights()
         grid = "╔" + ("═"*(2*self.length+1)) + "╗" + "\n"
         span = max_len(extra)+6
+        padding = "     "
 
         for rownum, row in enumerate(self.matrix):
             grid += "║ "
@@ -838,12 +904,12 @@ class Grid:
                 grid += color(symbol, clr)
                 grid += " "
 
-            if rownum == 1:
-                grid += "║               " + "╭" + "─" * span + "╮          " + "\n"
+            if rownum == 0:
+                grid += f"║{padding}" + "╭" + "─" * span + "╮          " + "\n"
             elif rownum == len(extra) + 1:
-                grid += "║               " + "╰" + "─" * span + "╯          " + "\n"
+                grid += f"║{padding}" + "╰" + "─" * span + "╯          " + "\n"
             elif extra and rownum != 0 and rownum < len(extra) + 1:
-                grid += "║               │   " + extra[rownum-1] + " " * (span-len(extra[rownum-1])-3) + "│          "
+                grid += f"║{padding}│   " + extra[rownum-1] + " " * (span-len(extra[rownum-1])-3) + "│          "
                 grid += "\n"
             else:
                 grid += "║\n"
@@ -890,11 +956,19 @@ def neighbours(cell: Cell, grid: Grid, method, filter=False):
         d = grid.down(cell)
         u = grid.up(cell)
         n = (grid.left(d), grid.right(d), grid.left(u), grid.right(u))
+    elif method == 7: # big range (2-I-2)
+        n = []
+        for x in range(cell.col - 5, cell.col + 6):
+            for y in range(cell.row - 5, cell.row + 6):
+                try:
+                    n.append(grid.matrix[y][x])
+                except IndexError:
+                    continue
     else:
         raise ValueError("Method out of bounds.")
 
     if not filter:
-        return n
+        return tuple(n)
     else:
         return tuple(i for i in n if i)
 
@@ -1028,7 +1102,7 @@ def reset_terminal_cursor_pos():
     sys.stdout.write("\033[H")
 
 def main():
-    global FRAMENUM, FRAMERATE, DYNAMIC_LIGHTING, \
+    global FRAMENUM, FRAMERATE, DYNAMIC_LIGHTING, BULB_POS, \
         PAUSED, UNDO_LIST, MAX_UNDO, \
         MIN_BRUSH_SIZE, MAX_BRUSH_SIZE, DEFAULT_BRUSH_SIZE, \
         RAINBOW_SAND, HUE, RBS_COUNTER
@@ -1048,6 +1122,7 @@ def main():
     PAUSED = False
 
     DYNAMIC_LIGHTING = True # [default: True]
+    BULB_POS = (L//2, -B)
 
     RAINBOW_SAND = False
     RBS_COUNTER = 0
@@ -1068,8 +1143,8 @@ def main():
     f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}]",
     f"Brush: <{grid.brush_size}px> ({elements[grid.brush_type]}) [{shapes_set[grid.brush_shape]}]", 
     f"Frame Rate: [{(FRAMERATE):.0f}]",
-    f"Gravity: [ {gravity_set[grid.orientation]} ]",
-    f"Simulation: ( {pause_set[PAUSED]} )"
+    f"Gravity: {gravity_set[grid.orientation]} ",
+    f"Simulation: {pause_set[PAUSED]} "
 ])
 
     timer = Timer()
@@ -1110,11 +1185,11 @@ def main():
 
         if ticked or pressed_key is not None:
             grid.show(extra=[   
-        f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}]",
+        f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}] LL:{grid.matrix[grid.pointer_y][grid.pointer_x].light_level}", 
         f"Brush: <{grid.brush_size}px> ({elements[grid.brush_type]}) [{shapes_set[grid.brush_shape]}]",
         f"Frame Rate: [{FRAMERATE}]",
-        f"Gravity: [ {gravity_set[grid.orientation]} ]",
-        f"Simulation: ( {pause_set[PAUSED]} )"
+        f"Gravity: {gravity_set[grid.orientation]} ",
+        f"Simulation: {pause_set[PAUSED]} "
     ])
         else:
             sleep(0.002)
