@@ -774,7 +774,7 @@ class Grid:
 
         return edges
 
-    def color_depth_variance(self, cell, hsv: tuple): # TO REWORK ENTIRELY
+    def color_depth_variance(self, cell, hsv: tuple):
         global DYNAMIC_LIGHTING 
         if not DYNAMIC_LIGHTING or cell.state in (FIRE, LAVA):
             return hsv
@@ -785,19 +785,29 @@ class Grid:
         
         return (h, s, max(15 , v))
 
-    def DO_NOT_shoot_a_light_ray_in_all_directions_and_illuminate_the_cells_that_it_hits(self, cell):
-        n: tuple[Cell] = neighbours(cell, self, 7, True)
+    def illuminate(self, cell: Cell):
+        n: tuple[Cell] = neighbours(cell, self, 7, True, size=5)
+
+        if all([i.state == LAVA for i in n]):
+            return
+
         for current in n:
-            current.light_level += (10 - get_dist(cell, current, True))//1.3
+
+            inv_dist = 10 - get_dist(cell, current, True)
+            biased = inv_dist * 5
+            final = biased ** 0.5
+            light = current.light_level + final
+
+            current.light_level = min(100, light)
 
     def dynamic_lights(self):
         global DYNAMIC_LIGHTING, BULB_POS
         if not DYNAMIC_LIGHTING:
             return
 
-        solids = [SAND, STEEL, DRYWOOD, WETWOOD, OBSIDIAN, GUNPOWDER, FUSE, URANIUM]
-        fluids = [WATER, ACID, STEAM]
-        lights = [FIRE, LAVA]
+        solids = (SAND, STEEL, DRYWOOD, WETWOOD, OBSIDIAN, GUNPOWDER, FUSE, URANIUM)
+        fluids = (WATER, ACID, STEAM)
+        lights = (FIRE, LAVA)
 
         bulb = BULB_POS
         max_light = 100
@@ -810,7 +820,7 @@ class Grid:
                 if not (0 <= x < self.length and 0 <= y < self.height):
                     continue
 
-                current_cell = self.matrix[y][x]
+                current_cell: Cell = self.matrix[y][x]
 
                 if current_cell.state in solids:
                     prev_light -= 7
@@ -818,10 +828,13 @@ class Grid:
                     prev_light -= 4
                 elif current_cell.state == AIR:
                     prev_light -= 0.5
-                elif current_cell.state in lights and current_cell.light_level < 90:
-                    self.DO_NOT_shoot_a_light_ray_in_all_directions_and_illuminate_the_cells_that_it_hits(current_cell)
 
-                current_cell.light_level = max(0, prev_light)           
+                current_cell.light_level = max(0, round(prev_light))
+
+        for row in self.matrix:
+            for cell in row:
+                if cell.state in lights:
+                    self.illuminate(cell)
     
     def display(self, cell: Cell):
         global HUE
@@ -938,7 +951,7 @@ def DDA_line(x1, y1, x2, y2) -> list[tuple[int]]:
 
     return points
 
-def neighbours(cell: Cell, grid: Grid, method, filter=False):
+def neighbours(cell: Cell, grid: Grid, method, filter=False, size = None):
     if method == 1: # sides
         n = (grid.left(cell), grid.right(cell))
     elif method == 2: # up-down
@@ -958,12 +971,11 @@ def neighbours(cell: Cell, grid: Grid, method, filter=False):
         n = (grid.left(d), grid.right(d), grid.left(u), grid.right(u))
     elif method == 7: # big range (2-I-2)
         n = []
-        for x in range(cell.col - 5, cell.col + 6):
-            for y in range(cell.row - 5, cell.row + 6):
-                try:
-                    n.append(grid.matrix[y][x])
-                except IndexError:
-                    continue
+        for x in range(cell.col - size, cell.col + 1 + size):
+            for y in range(cell.row - size, cell.row + 1 + size):
+                if y >= 0 and y <= grid.height - 1:
+                    if x >= 0 and x <= grid.length - 1:
+                        n.append(grid.matrix[y][x])
     else:
         raise ValueError("Method out of bounds.")
 
@@ -1122,7 +1134,7 @@ def main():
     PAUSED = False
 
     DYNAMIC_LIGHTING = True # [default: True]
-    BULB_POS = (L//2, -B)
+    BULB_POS = (L//2, -5) # the position of the main light source [default: (L//2, -B)]
 
     RAINBOW_SAND = False
     RBS_COUNTER = 0
@@ -1204,3 +1216,8 @@ if __name__ == "__main__":
     finally:
         hide_terminal_cursor()
 # master
+
+# crystal: rays passing through this cast a hue [pink-blue-green]{oscillation} and also glows with radius 3, +Acid=Glass, +Uranium=HyperRainbow
+# ice: description on page
+# glass: sand+lava=glass, 0.5 light drop, uranium insensitive.
+# graphite: light-blocking, powders slip, no fire but lava burns it very slowly
