@@ -5,7 +5,8 @@ from colorsys import hsv_to_rgb
 import math
 from collections import deque
 
-AIR, SAND, WATER, STEEL, ACID, STEAM, DRYWOOD, WETWOOD, FIRE, LAVA, OBSIDIAN, GUNPOWDER, FUSE, URANIUM = 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13
+AIR, SAND, WATER, STEEL, ACID, STEAM, DRYWOOD, WETWOOD, FIRE, LAVA, OBSIDIAN, GUNPOWDER, FUSE, URANIUM, CRYSTAL, GLASS, GRAPHITE, ICE = \
+      0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17
 
 class Timer:
 
@@ -74,6 +75,23 @@ class Grid:
                        for row in range(height)]
         self.edges = self.get_edges()                                      # except the top one
         self.bounds = self.get_edges(True)
+
+        self.glow_kernel = [[0] * 11 for _ in range(11)] 
+        for y, row in enumerate(self.glow_kernel):
+            for x, cell in enumerate(row):
+                relx = abs(5 - x)   
+                rely = abs(5 - y)
+                dist = relx + rely
+                inv_dist = 10 - dist
+                biased = inv_dist * 5
+                final = biased ** 0.5
+                self.glow_kernel[y][x] = final
+
+                # if dist < 10:
+                #     final = math.sqrt(5 * (10 - dist))
+                #     self.glow_kernel[y][x] = final
+                # else:
+                #     self.glow_kernel[y][x] = 0
 
     def swap(self, cell1: Cell, cell2: Cell):
         cell1.state, cell2.state = cell2.state, cell1.state
@@ -230,6 +248,8 @@ class Grid:
                     self.handle_fuse(cell)
                 elif cell.state == URANIUM:
                     self.handle_uranium(cell)
+                elif cell.state == ICE:
+                    self.handle_ice(cell)
 
     def handle_sand(self, cell: Cell):
         if random.randint(0,1):
@@ -392,7 +412,7 @@ class Grid:
             if current.state == WATER:
                 cell.state = STEAM
                 current.state = AIR
-            elif current.state in (FUSE, GUNPOWDER) and cell.update:
+            elif current.state == FUSE and cell.update:
                 current.state = FIRE
                 current.update = False
             elif random.random() < 0.01: 
@@ -445,24 +465,17 @@ class Grid:
             self.handle_water(cell)
 
     def handle_obsidian(self, cell):
+        global PROFILE
         w = 0
         for i in range(1, min(16, cell.row + 1)):
             above_cell = self.up(cell, i)
             if not above_cell:
                 break
             above = above_cell.state
-            if above in (AIR, OBSIDIAN, FIRE, STEAM, STEEL, WETWOOD, FUSE):
-                break
-            elif above in (SAND, GUNPOWDER):
-                w += 2
-            elif above == WATER:
-                w += 1
-            elif above == ACID:
-                w += 1
-            elif above == DRYWOOD:
-                w += 3
-            elif above == LAVA:
-                w += 3
+
+            weight = PROFILE[above]["weight"]
+            if weight == 0: break
+            else: w+= weight
 
         if w > 20:
             cell.state = AIR
@@ -478,8 +491,12 @@ class Grid:
             elif nearby.state == LAVA:
                 cell.state = FIRE
                 return
+            elif nearby.state == FIRE:
+                for surr in n:
+                    surr.state == FIRE
+                return
         self.handle_sand(cell)
-        
+
     def handle_fuse(self, cell):
         n: tuple[Cell] = neighbours(cell, self, 5, True)
 
@@ -531,6 +548,21 @@ class Grid:
 
         self.handle_sand(cell)
 
+    def handle_ice(self, cell: Cell):
+        try:
+            u, d, l, r = neighbours(cell, self, 3, True)
+        except ValueError:
+            return
+        if random.random() < 0.01:
+            if l and l.state == WATER:
+                l.state = ICE
+            if r and r.state == WATER:
+                r.state = ICE
+        if random.random() < 0.001:
+            if u and u.state == WATER:
+                u.state = ICE
+            if d and d.state == WATER:
+                d.state = ICE
 
     def handle_pointer(self, key):
         if key == "w":
@@ -559,7 +591,7 @@ class Grid:
 
                 self.handle_pointer(key.lower())
                 cur = self.matrix[self.pointer_y][self.pointer_x]
-        
+
     def handle_action(self, key):
         brush_size = self.brush_size - 1
         if key != " " or brush_size < 0:
@@ -685,12 +717,13 @@ class Grid:
                 n.state = target
                 stack.append(n)
 
-    def handle_brush_attributes(self, key, elements, shapes):
+    def handle_brush_attributes(self, key, shapes):
+        global PROFILE
         # Type
         if key == "q":
-            self.brush_type = (self.brush_type - 1) % len(elements)
+            self.brush_type = (self.brush_type - 1) % len(PROFILE)
         if key == "e":
-            self.brush_type = (self.brush_type + 1) % len(elements)
+            self.brush_type = (self.brush_type + 1) % len(PROFILE)
 
         # Shape
         if key == "Q":
@@ -788,25 +821,28 @@ class Grid:
     def illuminate(self, cell: Cell):
         n: tuple[Cell] = neighbours(cell, self, 7, True, size=5)
 
-        if all([i.state == LAVA for i in n]):
+        for nearby in neighbours(cell, self, 5, True):
+            if nearby.state != LAVA:
+                break
+        else:
             return
 
         for current in n:
+            kx = current.col - cell.col + 5
+            ky = current.row - cell.row + 5
 
-            inv_dist = 10 - get_dist(cell, current, True)
-            biased = inv_dist * 5
-            final = biased ** 0.5
-            light = current.light_level + final
+            if 0 <= ky < 11 and 0 <= kx < 11:
+                final = self.glow_kernel[ky][kx]
 
-            current.light_level = min(100, light)
+                if final > 0:
+                    light = current.light_level + final
+                    current.light_level = min(100, light)
 
     def dynamic_lights(self):
-        global DYNAMIC_LIGHTING, BULB_POS
+        global DYNAMIC_LIGHTING, BULB_POS, PROFILE
         if not DYNAMIC_LIGHTING:
             return
 
-        solids = (SAND, STEEL, DRYWOOD, WETWOOD, OBSIDIAN, GUNPOWDER, FUSE, URANIUM)
-        fluids = (WATER, ACID, STEAM)
         lights = (FIRE, LAVA)
 
         bulb = BULB_POS
@@ -821,13 +857,8 @@ class Grid:
                     continue
 
                 current_cell: Cell = self.matrix[y][x]
-
-                if current_cell.state in solids:
-                    prev_light -= 7
-                elif current_cell.state in fluids:
-                    prev_light -= 4
-                elif current_cell.state == AIR:
-                    prev_light -= 0.5
+                t = PROFILE[current_cell.state]["transparency"]
+                prev_light -= t
 
                 current_cell.light_level = max(0, round(prev_light))
 
@@ -835,23 +866,24 @@ class Grid:
             for cell in row:
                 if cell.state in lights:
                     self.illuminate(cell)
-    
+
     def display(self, cell: Cell):
-        global HUE
+        global HUE, PROFILE, FRAMENUM
 
         symbol: str = None
         hsv: tuple[int] = None
 
         s = cell.state
         on_pointer = (cell.row == self.pointer_y and cell.col == self.pointer_x)
+        symbol = PROFILE[s]["symbol"]
         if on_pointer and self.show_pointer:
             if s in (AIR, FIRE):
                 symbol = "⊹"
-            elif s in (SAND, STEAM, DRYWOOD, GUNPOWDER, URANIUM):
+            elif symbol == "▩":
                 symbol = "◇"
-            elif s in (WATER, ACID, LAVA):
+            elif symbol == "■":
                 symbol = "◈"
-            elif s in (STEEL, WETWOOD, OBSIDIAN, FUSE):
+            elif symbol == "◙":
                 symbol = "◆"
             else:
                 symbol = "?"
@@ -859,49 +891,30 @@ class Grid:
             hsv = (HUE, 100, 100)
 
         else:
-            if s == AIR:
-                symbol = "∙"
-                hsv = (0, 0, 6)
-            elif s in (SAND, STEAM, DRYWOOD, GUNPOWDER, URANIUM):
-                symbol = "▩"
+            # sand, uranium, crystal
+            hsv = PROFILE[s]["color"]
+            if hsv is None:
                 if s == SAND:
                     hsv = (cell.get_sand_hue(self.height, self.length) % 360, 36, 80)
-                elif s == STEAM:
-                    hsv = (80, 2, 40)
-                elif s == DRYWOOD:
-                    hsv = (28, 51, 46)
-                elif s == GUNPOWDER:
-                    hsv = (5, 0 , 5)
                 elif s == URANIUM:
                     hsv = (75, 100, 20 + cell.uraniumdecaystage*5)
-            elif s in (WATER, ACID, LAVA):
-                symbol = "■"
-                if s == WATER:
-                    hsv = (215, 78, 100)
-                elif s == ACID:
-                    hsv = (128, 100, 100)
-                elif s == LAVA:
-                    hsv = (17, 100, 100)
-            elif s in (STEEL, WETWOOD, OBSIDIAN, FUSE):
-                symbol = "◙"
-                if s == STEEL:
-                    hsv = (0, 0, 55)
-                elif s == WETWOOD:
-                    hsv = (25, 80, 25)
-                elif s == OBSIDIAN:
-                    hsv = (250, 70, 70)
-                elif s == FUSE:
-                    hsv = (55, 80, 20)
-            elif s == FIRE:
-                symbol = "●"
-                hsv = (35, 100, 100)
+                elif s == CRYSTAL:
+                    min_hue = 200
+                    max_hue = 250
+                    center = (min_hue + max_hue) / 2  # 240
+                    amplitude = (max_hue - min_hue) / 2  # 60
+                    speed = 0.05
+                    hue = center + amplitude * math.sin(FRAMENUM * speed)
+                    hsv = (hue, 75, 75)
 
             if s != AIR:
                 hsv = self.color_depth_variance(cell, hsv)
+
         if cell.contaminated and self.show_radiation_lines:
             hsv = (0, 0, 100)
+
         return (symbol, hsv)
-                
+
     def show(self, extra=0):
         global HUE
         self.dynamic_lights()
@@ -1117,7 +1130,7 @@ def main():
     global FRAMENUM, FRAMERATE, DYNAMIC_LIGHTING, BULB_POS, \
         PAUSED, UNDO_LIST, MAX_UNDO, \
         MIN_BRUSH_SIZE, MAX_BRUSH_SIZE, DEFAULT_BRUSH_SIZE, \
-        RAINBOW_SAND, HUE, RBS_COUNTER
+        RAINBOW_SAND, HUE, RBS_COUNTER, PROFILE
 
     L, B = 30, 30 # length and height of the grid [default: 30x30]
 
@@ -1142,7 +1155,99 @@ def main():
     MAX_UNDO = 1000 # the max cap of undo recordings, set this to low if experience performance issues [default: 1000]
     UNDO_LIST = deque(maxlen=MAX_UNDO) 
 
-    elements = {0: "Air", 1: "Sand", 2: "Water", 3: "Steel", 4: "Acid", 5: "Steam", 6: "Dry Wood", 7: "Wet Wood", 8: "Fire", 9: "Lava", 10: "Obsidian", 11: "Gunpowder", 12: "Fuse", 13: "Uranium"}
+    PROFILE = {
+        AIR : {"name": "Air",
+               "symbol": "∙",
+               "color": (0, 0, 6),
+               "transparency": 0.5,
+               "weight": 0},
+        SAND : {"name": "Sand",
+               "symbol": "▩",
+               "color": None,
+               "transparency": 7,
+               "weight": 2},
+        WATER : {"name": "Water",
+               "symbol": "■",
+               "color": (215, 78, 100),
+               "transparency": 4,
+               "weight": 1},
+        STEEL : {"name": "Steel",
+               "symbol": "◙",
+               "color": (0, 0, 55),
+               "transparency": 7,
+               "weight": 0},
+        ACID : {"name": "Acid",
+               "symbol": "■",
+               "color": (128, 100, 100),
+               "transparency": 4,
+               "weight": 1},
+        STEAM : {"name": "Steam",
+               "symbol": "▩",
+               "color": (80, 2, 40),
+               "transparency": 4,
+               "weight": 0},
+        DRYWOOD : {"name": "Dry Wood",
+               "symbol": "▩",
+               "color": (28, 51, 46),
+               "transparency": 7,
+               "weight": 3},
+        WETWOOD : {"name": "Wet Wood",
+               "symbol": "◙",
+               "color": (25, 80, 25),
+               "transparency": 7,
+               "weight": 0},
+        FIRE : {"name": "Fire",
+               "symbol": "●",
+               "color": (35, 100, 100),
+               "transparency": 0,
+               "weight": 0},
+        LAVA : {"name": "Lava",
+               "symbol": "■",
+               "color": (17, 100, 100),
+               "transparency": 0,
+               "weight": 3},
+        OBSIDIAN : {"name": "Obsidian",
+               "symbol": "◙",
+               "color": (250, 70, 70),
+               "transparency": 7,
+               "weight": 0},
+        URANIUM : {"name": "Uranium",
+               "symbol": "▩",
+               "color": None,
+               "transparency": 7,
+               "weight": 7},
+        GUNPOWDER : {"name": "Gunpowder",
+               "symbol": "▩",
+               "color": (5, 0 , 5),
+               "transparency": 7,
+               "weight": 2},
+        FUSE : {"name": "Fuse",
+               "symbol": "◙",
+               "color": (55, 80, 20),
+               "transparency": 7,
+               "weight": 0},
+        CRYSTAL : {"name": "Crystal",
+               "symbol": "◙",
+               "color": None,
+               "transparency": -1,
+               "weight": 0},
+        GLASS : {"name": "Glass",
+               "symbol": "◙",
+               "color": (0, 0, 80),
+               "transparency": 0,
+               "weight": 0},
+        GRAPHITE : {"name": "Graphite",
+               "symbol": "◙",
+               "color": (200, 65, 45),
+               "transparency": 100,
+               "weight": 0},
+        ICE : {"name": "Ice",
+               "symbol": "◙",
+               "color": (200, 80, 100),
+               "transparency": 4,
+               "weight": 0}
+    }
+
     gravity_set = {"up": "↧", "down": "↥", "left": "↦", "right": "↤"}
     pause_set = {False: "▢", True: "▶"}
     shapes_set = {0: "Solid Square", 1: "Hollow Square", 2: "Solid Circle", 3: "Hollow Circle", 4: "Solid Diamond", 5: "Hollow Diamond", 6: "Horizontal Line", 7: "Vertical Line", 8: "Primary Diagonal", 9: "Secondary Diagonal", 10: "Fill Tool"}
@@ -1152,17 +1257,23 @@ def main():
     clear_terminal_line()
     grid = Grid(L,B)
     grid.show(extra=[   
-    f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}]",
-    f"Brush: <{grid.brush_size}px> ({elements[grid.brush_type]}) [{shapes_set[grid.brush_shape]}]", 
+    f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{PROFILE[grid.matrix[grid.pointer_y][grid.pointer_x].state]["name"]}]",
+    f"Brush: <{grid.brush_size}px> ({PROFILE[grid.brush_type]["name"]}) [{shapes_set[grid.brush_shape]}]", 
     f"Frame Rate: [{(FRAMERATE):.0f}]",
     f"Gravity: {gravity_set[grid.orientation]} ",
     f"Simulation: {pause_set[PAUSED]} "
 ])
 
     timer = Timer()
+    # DEBUG
+    perf = Timer()
+    performance = perf.diff()
+    max_perf = performance
+    # /DEBUG
 
     # main loop 
     while True:
+        perf.reset()
         pressed_key = get_keypress()
         ticked = False
 
@@ -1176,7 +1287,7 @@ def main():
 
         grid.handle_pointer(pressed_key)
         grid.handle_action(pressed_key)
-        grid.handle_brush_attributes(pressed_key, elements, shapes_set)
+        grid.handle_brush_attributes(pressed_key, shapes_set)
         grid.handle_orientation(pressed_key)
         grid.handle_clear(pressed_key)
         grid.handle_paused(pressed_key)
@@ -1196,12 +1307,23 @@ def main():
             grid.show_radiation_lines = not grid.show_radiation_lines
 
         if ticked or pressed_key is not None:
+            # DEBUG
+            performance = perf.diff()*1000
+            if performance > max_perf:
+                # max_perf = average(max_perf, performance)
+                max_perf = performance
+            if pressed_key == "0":
+                max_perf = 1
+            # /DEBUG
+
             grid.show(extra=[   
-        f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{elements[grid.matrix[grid.pointer_y][grid.pointer_x].state]}] LL:{grid.matrix[grid.pointer_y][grid.pointer_x].light_level}", 
-        f"Brush: <{grid.brush_size}px> ({elements[grid.brush_type]}) [{shapes_set[grid.brush_shape]}]",
+        f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{PROFILE[grid.matrix[grid.pointer_y][grid.pointer_x].state]["name"]}]", 
+        f"Brush: <{grid.brush_size}px> ({PROFILE[grid.brush_type]["name"]}) [{shapes_set[grid.brush_shape]}]",
         f"Frame Rate: [{FRAMERATE}]",
         f"Gravity: {gravity_set[grid.orientation]} ",
-        f"Simulation: {pause_set[PAUSED]} "
+        f"Simulation: {pause_set[PAUSED]}",
+        f"LL:{grid.matrix[grid.pointer_y][grid.pointer_x].light_level}",
+        f"FPS: {min(99, 100/performance):.2f} [{100/max_perf:.2f}]"
     ])
         else:
             sleep(0.002)
