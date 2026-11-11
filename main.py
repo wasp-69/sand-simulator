@@ -31,6 +31,7 @@ class Cell:
         self.uraniumdecaystage = 0
         self.contaminated = False
         self.light_level = 100
+        self.add_hue = None
 
     def get_sand_hue(self, height, length):
         global RAINBOW_SAND, HUE
@@ -107,10 +108,10 @@ class Grid:
             for y in range(0, self.height):
                 self.matrix[y][x].contaminated = False
 
-    def reset_light_levels(self):
+    def reset_add_hue(self):
         for x in range(0, self.length):
             for y in range(0, self.height):
-                self.matrix[y][x].light_level = 30
+                self.matrix[y][x].add_hue = None
 
     def up(self, cell, n: int = 1, static = False):
         if not cell:
@@ -398,7 +399,7 @@ class Grid:
 
     def handle_fire(self, cell: Cell):
         n: tuple[Cell] = neighbours(cell, self, 5, True)
-        not_flammables = (AIR, WATER, STEEL, SAND, ACID, STEAM, FIRE, LAVA, OBSIDIAN, URANIUM)
+        not_flammables = (AIR, WATER, STEEL, SAND, ACID, STEAM, FIRE, LAVA, OBSIDIAN, URANIUM, CRYSTAL, GLASS, GRAPHITE)
 
         if all(cell.state in not_flammables for cell in n): # fire is surrounded by non-flammable materials
             if random.random() < 0.2:
@@ -410,19 +411,24 @@ class Grid:
 
         for current in n: # else,
             if current.state == WATER:
-                cell.state = STEAM
-                current.state = AIR
-            elif current.state == FUSE and cell.update:
+                cell.state = AIR
+            elif current.state in (GUNPOWDER, FUSE) and cell.update:
                 current.state = FIRE
                 current.update = False
-            elif random.random() < 0.01: 
-                if current.state == DRYWOOD and cell.update:
-                    current.state = FIRE
-                    current.update = False
-                if current.state == WETWOOD and cell.update:
-                    current.state = DRYWOOD
-                    cell.state = STEAM
-                    current.update = False
+            if current.state == ICE and cell.update:
+                current.state = WATER
+                current.update = False
+            if current.state == DRYWOOD and cell.update and random.random() < 0.1:
+                for nearby in n:
+                    if nearby.state == AIR and random.random() < 0.75:
+                        nearby.state = FIRE
+                        nearby.update = False
+                if random.random() < 0.01:
+                    current.state = AIR
+            if current.state == WETWOOD and cell.update and random.random() < 0.01:
+                current.state = DRYWOOD
+                cell.state = STEAM
+                current.update = False
 
     def handle_lava(self, cell):
         global FRAMENUM
@@ -459,6 +465,11 @@ class Grid:
                     if random.random() < 0.5:
                         cell.state = AIR
                         return
+                elif nearby.state == ICE:
+                    nearby.state = WATER
+                    cell.state = LAVA
+                    return
+                    
             below = self.down(cell)
             if below and below.state == FIRE:
                 self.swap(cell, below)
@@ -490,10 +501,6 @@ class Grid:
                 return
             elif nearby.state == LAVA:
                 cell.state = FIRE
-                return
-            elif nearby.state == FIRE:
-                for surr in n:
-                    surr.state == FIRE
                 return
         self.handle_sand(cell)
 
@@ -544,9 +551,20 @@ class Grid:
                     elif hit_cell.state in (GUNPOWDER, FUSE):
                         hit_cell.state = FIRE
                         cell.uraniumdecaystage += 1
-                    # elif
+                    elif hit_cell.state == ICE:
+                        hit_cell.state = WATER
+                        cell.uraniumdecaystage += 1
 
         self.handle_sand(cell)
+
+    def handle_crystal(self, cell: Cell):
+        ...
+
+    def handle_glass(self, cell: Cell):
+        ...
+
+    def handle_graphite(self, cell: Cell):
+        ...
 
     def handle_ice(self, cell: Cell):
         try:
@@ -563,6 +581,13 @@ class Grid:
                 u.state = ICE
             if d and d.state == WATER:
                 d.state = ICE
+
+        for nearby in (u,d,l,r):
+            if nearby.state == URANIUM:
+                if random.random() < 0.5:
+                    nearby.uraniumdecaystage = max(0, nearby.uraniumdecaystage - 1)
+            elif nearby.state == STEAM:
+                nearby.state = WATER
 
     def handle_pointer(self, key):
         if key == "w":
@@ -793,17 +818,34 @@ class Grid:
                 other = random.choice(random.choice(self.matrix))
                 self.swap(this, other)
 
-    def get_edges(self, top=False):
+    def get_edges(self, top=False, limit=None, cell: Cell = None):
         edges = []
+        if limit is None:
+            edges.extend(self.matrix[-1])
+            if top:
+                edges.extend(self.matrix[0])
 
+            for y in range(1, self.height - 1):
+                edges.append(self.matrix[y][0])
+                edges.append(self.matrix[y][-1])
 
-        edges.extend(self.matrix[-1])
-        if top:
-            edges.extend(self.matrix[0])
+        else:
+            upbound = max(0, cell.row - limit)
+            downbound = min(self.length - 1, cell.row + limit)
+            leftbound = max(0, cell.col - limit)
+            rightbound = min(self.height - 1, cell.col + limit)
+            edges.extend(self.matrix[upbound])
+            edges.extend(self.matrix[downbound])
 
-        for y in range(1, self.height - 1):
-            edges.append(self.matrix[y][0])
-            edges.append(self.matrix[y][-1])
+            for x in range(leftbound, rightbound + 1):
+                edges.append(self.matrix[upbound][x])
+                if upbound != downbound:
+                    edges.append(self.matrix[downbound][x])
+
+            for y in range(upbound + 1, downbound):
+                edges.append(self.matrix[y][leftbound])
+                if leftbound != rightbound:
+                    edges.append(self.matrix[y][rightbound])
 
         return edges
 
@@ -836,21 +878,25 @@ class Grid:
 
                 if final > 0:
                     light = current.light_level + final
-                    current.light_level = min(100, light)
+                    current.light_level = round(min(100, light))
 
     def dynamic_lights(self):
-        global DYNAMIC_LIGHTING, BULB_POS, PROFILE
+        global DYNAMIC_LIGHTING, BULB_POS, PROFILE, FRAMENUM, PERFORMANCE_MODE
         if not DYNAMIC_LIGHTING:
             return
+        
+        if FRAMENUM%2 and PERFORMANCE_MODE: return
 
-        lights = (FIRE, LAVA)
+        lights = (FIRE, LAVA, CRYSTAL)
 
         bulb = BULB_POS
         max_light = 100
 
         for edge_cell in self.edges: # for every cell that is on the edge,
             prev_light = max_light
-            for current in DDA_line(bulb[0], bulb[1], edge_cell.col, edge_cell.row): # make a ray from bulb to that specific edge cell and traverse it
+            add_hue = None
+            ray = DDA_line(bulb[0], bulb[1], edge_cell.col, edge_cell.row)
+            for ray_dist,current in enumerate(ray): # make a ray from bulb to that specific edge cell and traverse it
                 x, y = current
 
                 if not (0 <= x < self.length and 0 <= y < self.height):
@@ -861,6 +907,11 @@ class Grid:
                 prev_light -= t
 
                 current_cell.light_level = max(0, round(prev_light))
+
+                if add_hue is not None:
+                    current_cell.add_hue = add_hue * prev_light//100
+                if current_cell.state == CRYSTAL:
+                    add_hue = 240 + 60 * math.sin(FRAMENUM * 0.05)
 
         for row in self.matrix:
             for cell in row:
@@ -878,13 +929,15 @@ class Grid:
         symbol = PROFILE[s]["symbol"]
         if on_pointer and self.show_pointer:
             if s in (AIR, FIRE):
-                symbol = "⊹"
+                symbol = "⛶"
             elif symbol == "▩":
-                symbol = "◇"
+                symbol = "❖" 
             elif symbol == "■":
                 symbol = "◈"
             elif symbol == "◙":
                 symbol = "◆"
+            elif symbol == "▢":
+                symbol = "◇"
             else:
                 symbol = "?"
 
@@ -909,6 +962,12 @@ class Grid:
 
             if s != AIR:
                 hsv = self.color_depth_variance(cell, hsv)
+
+        if cell.add_hue is not None and cell.state not in (LAVA, FIRE, CRYSTAL): # crystal hue addition
+            h, s, v = hsv
+            new_h = average(h, cell.add_hue)
+            final = max(new_h, h)
+            hsv = (final, s, v)
 
         if cell.contaminated and self.show_radiation_lines:
             hsv = (0, 0, 100)
@@ -945,6 +1004,7 @@ class Grid:
         sys.stdout.write("\n")
         sys.stdout.flush()
         self.reset_radiation_flags()
+        self.reset_add_hue()
 
 def DDA_line(x1, y1, x2, y2) -> list[tuple[int]]:
     x = x1
@@ -1130,7 +1190,7 @@ def main():
     global FRAMENUM, FRAMERATE, DYNAMIC_LIGHTING, BULB_POS, \
         PAUSED, UNDO_LIST, MAX_UNDO, \
         MIN_BRUSH_SIZE, MAX_BRUSH_SIZE, DEFAULT_BRUSH_SIZE, \
-        RAINBOW_SAND, HUE, RBS_COUNTER, PROFILE
+        RAINBOW_SAND, HUE, RBS_COUNTER, PROFILE, PERFORMANCE_MODE
 
     L, B = 30, 30 # length and height of the grid [default: 30x30]
 
@@ -1154,6 +1214,7 @@ def main():
 
     MAX_UNDO = 1000 # the max cap of undo recordings, set this to low if experience performance issues [default: 1000]
     UNDO_LIST = deque(maxlen=MAX_UNDO) 
+    PERFORMANCE_MODE = False
 
     PROFILE = {
         AIR : {"name": "Air",
@@ -1232,7 +1293,7 @@ def main():
                "transparency": -1,
                "weight": 0},
         GLASS : {"name": "Glass",
-               "symbol": "◙",
+               "symbol": "▢",
                "color": (0, 0, 80),
                "transparency": 0,
                "weight": 0},
@@ -1249,7 +1310,7 @@ def main():
     }
 
     gravity_set = {"up": "↧", "down": "↥", "left": "↦", "right": "↤"}
-    pause_set = {False: "▢", True: "▶"}
+    pause_set = {False: "Running", True: "Paused"}
     shapes_set = {0: "Solid Square", 1: "Hollow Square", 2: "Solid Circle", 3: "Hollow Circle", 4: "Solid Diamond", 5: "Hollow Diamond", 6: "Horizontal Line", 7: "Vertical Line", 8: "Primary Diagonal", 9: "Secondary Diagonal", 10: "Fill Tool"}
 
     wipe_terminal_screen()
@@ -1273,7 +1334,7 @@ def main():
 
     # main loop 
     while True:
-        perf.reset()
+        perf.reset() # debug
         pressed_key = get_keypress()
         ticked = False
 
@@ -1306,6 +1367,9 @@ def main():
         if pressed_key == "/":
             grid.show_radiation_lines = not grid.show_radiation_lines
 
+        if PERFORMANCE_MODE:
+            UNDO_LIST.maxlen = 100
+
         if ticked or pressed_key is not None:
             # DEBUG
             performance = perf.diff()*1000
@@ -1327,7 +1391,6 @@ def main():
     ])
         else:
             sleep(0.002)
-        # sleep(1/FRAMERATE)
 
 
 if __name__ == "__main__":
