@@ -5,8 +5,8 @@ from colorsys import hsv_to_rgb
 import math
 from collections import deque
 
-AIR, SAND, WATER, STEEL, ACID, STEAM, DRYWOOD, WETWOOD, FIRE, LAVA, OBSIDIAN, GUNPOWDER, FUSE, URANIUM, CRYSTAL, GLASS, GRAPHITE, ICE = \
-      0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17
+AIR, SAND, WATER, STEEL, ACID, STEAM, DRYWOOD, WETWOOD, FIRE, LAVA, OBSIDIAN, GUNPOWDER, FUSE, URANIUM, CRYSTAL, GLASS, GRAPHITE, ICE, FOSSILFUEL, FUMES = \
+      0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19
 
 class Timer:
 
@@ -50,6 +50,11 @@ class Cell:
             return (self.col == 0 or self.col == 30 or self.row == 30)
         else:
             return (self.col == 0 or self.col == 30 or self.row == 30 or self.row == 0)
+
+    def type(self):
+        global PROFILE, TYPE_DICT
+        symbol = PROFILE[self.state]["symbol"]
+        return TYPE_DICT[symbol]
 
 class Grid:
 
@@ -249,6 +254,8 @@ class Grid:
                     self.handle_fuse(cell)
                 elif cell.state == URANIUM:
                     self.handle_uranium(cell)
+                elif cell.state == GRAPHITE:
+                    self.handle_graphite(cell)
                 elif cell.state == ICE:
                     self.handle_ice(cell)
 
@@ -442,7 +449,7 @@ class Grid:
 
             for nearby in n:
                 if nearby.state == SAND:
-                    nearby.state = AIR
+                    nearby.state = GLASS
                 elif nearby.state == WATER:
                     nearby.state = AIR
                     cell.state = OBSIDIAN
@@ -515,47 +522,93 @@ class Grid:
                 cell.state = FIRE
 
     def handle_uranium(self, cell: Cell):
+        global PAUSED
         if cell.uraniumdecaystage > 11: # death by over-decay
             cell.state = AIR
             return
 
         if random.random() < 0.01 + (cell.uraniumdecaystage / 200): # random chance to SHOOT radiation ray
-
+            PAUSED = True # debug
             depth = random.randint(0, min(self.length-1, self.height-1))
             if random.random() < 0.5:
                 coords = (random.choice([0, self.length-1]), depth)
             else:
                 coords = (depth, random.choice([0, self.height-1]))
 
-            for ray in DDA_line(cell.col, cell.row, coords[0], coords[1]): # traversing that ray for cells
-                hit_cell = self.matrix[ray[1]][ray[0]]
-                dist = get_dist(cell, hit_cell, True)
-                hit_cell.contaminated = True
-
-                if hit_cell.state == OBSIDIAN: # sheilding effect of obsidian
-                    break
-
-                if random.random() < 0.2 / (1 + dist / 10): # random chance to have a reaction happen
-                    if hit_cell.state == WATER:
-                        hit_cell.state = ACID
-                        cell.uraniumdecaystage += 1
-                    elif hit_cell.state == STEEL:
-                        hit_cell.state = SAND
-                        cell.uraniumdecaystage += 1
-                    elif hit_cell.state == DRYWOOD:
-                        hit_cell.state = FIRE
-                        cell.uraniumdecaystage += 1
-                    elif hit_cell.state == SAND and random.random() < 0.3:
-                        hit_cell.state = AIR
-                        cell.uraniumdecaystage += 1
-                    elif hit_cell.state in (GUNPOWDER, FUSE):
-                        hit_cell.state = FIRE
-                        cell.uraniumdecaystage += 1
-                    elif hit_cell.state == ICE:
-                        hit_cell.state = WATER
-                        cell.uraniumdecaystage += 1
+            to_cell = self.matrix[coords[1]][coords[0]]
+            self.handle_raycast(cell, to_cell, extended=False)
 
         self.handle_sand(cell)
+
+    def handle_raycast(self, from_cell: Cell, to_cell: Cell, extended, recursed=False, to_coords: tuple = None, depth:int = 0, emitter: Cell = None):
+        global DEBUGVAR
+        if depth >= 100:
+            return
+        if emitter is None:
+            emitter = from_cell
+
+        if to_coords is not None:
+            raycast = line(from_cell.col, from_cell.row, to_coords[0], to_coords[1], extend=extended, grid=self)
+        else:
+            raycast = line(from_cell.col, from_cell.row, to_cell.col, to_cell.row, extend=extended, grid=self)
+
+        for index, ray in enumerate(raycast): # traversing that ray for cells
+            if recursed and index == 0:
+                continue
+
+            hit_cell = self.matrix[ray[1]][ray[0]]
+            dist = get_dist(from_cell, hit_cell, True)
+            hit_cell.contaminated = True
+
+            if hit_cell.state == OBSIDIAN: # sheilding effect of obsidian
+                break
+            elif hit_cell.state == GRAPHITE: # bounce the ray into the correct direction
+                dx = hit_cell.col - raycast[0][0]
+                dy = hit_cell.row - raycast[0][1]
+                toflip = ""
+                stepx = hit_cell.col - raycast[index-1][0]
+                stepy = hit_cell.row - raycast[index-1][1]
+
+                if stepy == 0:      toflip = "x"
+                elif stepx == 0:    toflip = "y"
+                else:
+                    hor_state = self.matrix[hit_cell.row][hit_cell.col - stepx].state
+                    ver_state = self.matrix[hit_cell.row - stepy][hit_cell.col].state
+
+                    if hor_state == GRAPHITE and ver_state != GRAPHITE:     toflip = "y"
+                    elif hor_state != GRAPHITE and ver_state == GRAPHITE:   toflip = "x"
+                    elif hor_state == ver_state == GRAPHITE:    toflip = "xy"
+                    else:
+                        if abs(dx) > abs(dy):   toflip = "x"
+                        elif abs(dx) < abs(dy):   toflip = "y"
+                        else: toflip = "xy"
+
+                rx = -dx if "x" in toflip else dx
+                ry = -dy if "y" in toflip else dy
+                target = (hit_cell.col + rx, hit_cell.row + ry)
+
+                self.handle_raycast(hit_cell, None, extended=True, recursed=True, to_coords=target, depth=depth+1, emitter=emitter)
+                return
+
+            if random.random() < 0.2 / (1 + dist / 10): # random chance to have a reaction happen
+                if hit_cell.state == WATER:
+                    hit_cell.state = ACID
+                    emitter.uraniumdecaystage += 1
+                elif hit_cell.state == STEEL:
+                    hit_cell.state = SAND
+                    emitter.uraniumdecaystage += 1
+                elif hit_cell.state == DRYWOOD:
+                    hit_cell.state = FIRE
+                    emitter.uraniumdecaystage += 1
+                elif hit_cell.state == SAND and random.random() < 0.3:
+                    hit_cell.state = AIR
+                    emitter.uraniumdecaystage += 1
+                elif hit_cell.state in (GUNPOWDER, FUSE):
+                    hit_cell.state = FIRE
+                    emitter.uraniumdecaystage += 1
+                elif hit_cell.state == ICE:
+                    hit_cell.state = WATER
+                    emitter.uraniumdecaystage += 1
 
     def handle_crystal(self, cell: Cell):
         ...
@@ -564,7 +617,24 @@ class Grid:
         ...
 
     def handle_graphite(self, cell: Cell):
-        ...
+        above: Cell = self.up(cell)
+        if random.randint(0,1):
+            first: Cell = self.left(above)
+            second: Cell = self.right(above)
+        else:
+            first: Cell = self.right(above)
+            second: Cell = self.left(above)
+
+        if first is None or second is None:
+            return
+
+        if above and above.type() == "powder":
+            if second.update and first.state != AIR and second.type() not in ("solid", "fire"):
+                self.swap(above, second)
+                second.update = False
+            elif first.update and second.state != AIR and first.type() not in ("solid", "fire"):
+                self.swap(above, first)
+                first.update = False
 
     def handle_ice(self, cell: Cell):
         try:
@@ -895,7 +965,7 @@ class Grid:
         for edge_cell in self.edges: # for every cell that is on the edge,
             prev_light = max_light
             add_hue = None
-            ray = DDA_line(bulb[0], bulb[1], edge_cell.col, edge_cell.row)
+            ray = line(bulb[0], bulb[1], edge_cell.col, edge_cell.row)
             for ray_dist,current in enumerate(ray): # make a ray from bulb to that specific edge cell and traverse it
                 x, y = current
 
@@ -1006,21 +1076,30 @@ class Grid:
         self.reset_radiation_flags()
         self.reset_add_hue()
 
-def DDA_line(x1, y1, x2, y2) -> list[tuple[int]]:
-    x = x1
-    y = y1
+def line(x0: int, y0: int, x1: int, y1: int, extend: bool = False, grid: Grid = None) -> list[tuple[int, int]]:
+    dx = abs(x1 - x0)
+    sx = 1 if x0 < x1 else -1
+    dy = -abs(y1 - y0)
+    sy = 1 if y0 < y1 else -1
+    error = dx + dy
+    points: list[tuple[int, int]] = []
 
-    points = [(x, y)]
+    while True:
+        if extend:
+            if grid is None or not (0 <= x0 < grid.length and 0 <= y0 < grid.height): break
+        
+        points.append((x0, y0))
 
-    dx = x2 - x1
-    dy = y2 - y1
+        if not extend and x0 == x1 and y0 == y1: break
+        if dx == dy == 0: break
 
-    steps = max( abs(dx), abs(dy) )
-
-    for _ in range(steps):
-        x += dx/steps
-        y += dy/steps
-        points.append((round(x), round(y)))
+        e2 = 2 * error
+        if e2 >= dy:
+            error += dy
+            x0 += sx
+        if e2 <= dx:
+            error += dx
+            y0 += sy
 
     return points
 
@@ -1057,9 +1136,13 @@ def neighbours(cell: Cell, grid: Grid, method, filter=False, size = None):
     else:
         return tuple(i for i in n if i)
 
-def get_dist(cell1: Cell, cell2: Cell, direct=False) -> tuple[int]:
-    xdist = abs(cell1.col - cell2.col)
-    ydist = abs(cell1.row - cell2.row)
+def get_dist(cell1: Cell, cell2: Cell, direct=False, signed=False) -> tuple[int]:
+    if signed:
+        xdist = abs(cell1.col - cell2.col)
+        ydist = abs(cell1.row - cell2.row)
+    else:
+        xdist = abs(cell1.col - cell2.col)
+        ydist = abs(cell1.row - cell2.row)
     if direct:
         return xdist + ydist
     return (xdist, ydist)
@@ -1190,12 +1273,13 @@ def main():
     global FRAMENUM, FRAMERATE, DYNAMIC_LIGHTING, BULB_POS, \
         PAUSED, UNDO_LIST, MAX_UNDO, \
         MIN_BRUSH_SIZE, MAX_BRUSH_SIZE, DEFAULT_BRUSH_SIZE, \
-        RAINBOW_SAND, HUE, RBS_COUNTER, PROFILE, PERFORMANCE_MODE
+        RAINBOW_SAND, HUE, RBS_COUNTER, PROFILE, TYPE_DICT, PERFORMANCE_MODE, \
+        DEBUGVAR
 
     L, B = 30, 30 # length and height of the grid [default: 30x30]
 
     MIN_BRUSH_SIZE = 0 # [default: 0]
-    MAX_BRUSH_SIZE = 7 # [default: 7]
+    MAX_BRUSH_SIZE = 30 # [default: 7]
     DEFAULT_BRUSH_SIZE = 1
 
     FRAMERATE = 60 # decrease if experiencing stutter [default: 60]
@@ -1215,6 +1299,8 @@ def main():
     MAX_UNDO = 1000 # the max cap of undo recordings, set this to low if experience performance issues [default: 1000]
     UNDO_LIST = deque(maxlen=MAX_UNDO) 
     PERFORMANCE_MODE = False
+
+    DEBUGVAR = ""
 
     PROFILE = {
         AIR : {"name": "Air",
@@ -1243,7 +1329,7 @@ def main():
                "transparency": 4,
                "weight": 1},
         STEAM : {"name": "Steam",
-               "symbol": "▩",
+               "symbol": "◍",
                "color": (80, 2, 40),
                "transparency": 4,
                "weight": 0},
@@ -1312,6 +1398,15 @@ def main():
     gravity_set = {"up": "↧", "down": "↥", "left": "↦", "right": "↤"}
     pause_set = {False: "Running", True: "Paused"}
     shapes_set = {0: "Solid Square", 1: "Hollow Square", 2: "Solid Circle", 3: "Hollow Circle", 4: "Solid Diamond", 5: "Hollow Diamond", 6: "Horizontal Line", 7: "Vertical Line", 8: "Primary Diagonal", 9: "Secondary Diagonal", 10: "Fill Tool"}
+    TYPE_DICT = {
+                "∙": "air",
+                "▩": "powder",
+                "■": "liquid",
+                "◙": "solid",
+                "●": "fire",
+                "▢": "glass",
+                "◍": "gas"
+            }
 
     wipe_terminal_screen()
     hide_terminal_cursor()
@@ -1322,7 +1417,7 @@ def main():
     f"Brush: <{grid.brush_size}px> ({PROFILE[grid.brush_type]["name"]}) [{shapes_set[grid.brush_shape]}]", 
     f"Frame Rate: [{(FRAMERATE):.0f}]",
     f"Gravity: {gravity_set[grid.orientation]} ",
-    f"Simulation: {pause_set[PAUSED]} "
+    f"Simulation: {pause_set[PAUSED]} ", DEBUGVAR
 ])
 
     timer = Timer()
@@ -1387,7 +1482,7 @@ def main():
         f"Gravity: {gravity_set[grid.orientation]} ",
         f"Simulation: {pause_set[PAUSED]}",
         f"LL:{grid.matrix[grid.pointer_y][grid.pointer_x].light_level}",
-        f"FPS: {min(99, 100/performance):.2f} [{100/max_perf:.2f}]"
+        f"FPS: {min(99, 100/performance):.2f} [{100/max_perf:.2f}]", DEBUGVAR
     ])
         else:
             sleep(0.002)
@@ -1406,3 +1501,7 @@ if __name__ == "__main__":
 # ice: description on page
 # glass: sand+lava=glass, 0.5 light drop, uranium insensitive.
 # graphite: light-blocking, powders slip, no fire but lava burns it very slowly
+
+# portal symbols : ⬬ ⬭
+# extras : ⟡ ⬡ ⬣ ✦ ✡
+# cloner/pump : ⧆ or 🞒
