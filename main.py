@@ -32,6 +32,7 @@ class Cell:
         self.contaminated = False
         self.light_level = 100
         self.add_hue = None
+        self.crystal_glow = 1
 
     def get_sand_hue(self, height, length):
         global RAINBOW_SAND, HUE
@@ -79,7 +80,7 @@ class Grid:
 
         self.matrix = [[Cell(row=row, col=col) for col in range(length)]
                        for row in range(height)]
-        self.edges = self.get_edges()                                      # except the top one
+        self.edges = self.get_edges(True)                                      # with the top one
         self.bounds = self.get_edges(True)
 
         self.glow_kernel = [[0] * 11 for _ in range(11)] 
@@ -93,15 +94,10 @@ class Grid:
                 final = biased ** 0.5
                 self.glow_kernel[y][x] = final
 
-                # if dist < 10:
-                #     final = math.sqrt(5 * (10 - dist))
-                #     self.glow_kernel[y][x] = final
-                # else:
-                #     self.glow_kernel[y][x] = 0
-
     def swap(self, cell1: Cell, cell2: Cell):
         cell1.state, cell2.state = cell2.state, cell1.state
         cell1.uraniumdecaystage, cell2.uraniumdecaystage = cell2.uraniumdecaystage, cell1.uraniumdecaystage
+        cell1.crystal_glow, cell2.crystal_glow = cell2.crystal_glow, cell1.crystal_glow
 
     def reset_update_flags(self):
         for x in range(0, self.length):
@@ -111,7 +107,10 @@ class Grid:
     def reset_radiation_flags(self):
         for x in range(0, self.length):
             for y in range(0, self.height):
-                self.matrix[y][x].contaminated = False
+                c = self.matrix[y][x]
+                c.contaminated = False
+                if c.state != CRYSTAL:
+                    c.crystal_glow = 1
 
     def reset_add_hue(self):
         for x in range(0, self.length):
@@ -254,6 +253,8 @@ class Grid:
                     self.handle_fuse(cell)
                 elif cell.state == URANIUM:
                     self.handle_uranium(cell)
+                elif cell.state == CRYSTAL:
+                    self.handle_crystal(cell)
                 elif cell.state == GRAPHITE:
                     self.handle_graphite(cell)
                 elif cell.state == ICE:
@@ -476,6 +477,8 @@ class Grid:
                     nearby.state = WATER
                     cell.state = LAVA
                     return
+                elif nearby.state == GRAPHITE and random.random() < 0.01:
+                    nearby.state == GUNPOWDER
                     
             below = self.down(cell)
             if below and below.state == FIRE:
@@ -528,7 +531,6 @@ class Grid:
             return
 
         if random.random() < 0.01 + (cell.uraniumdecaystage / 200): # random chance to SHOOT radiation ray
-            PAUSED = True # debug
             depth = random.randint(0, min(self.length-1, self.height-1))
             if random.random() < 0.5:
                 coords = (random.choice([0, self.length-1]), depth)
@@ -589,6 +591,12 @@ class Grid:
 
                 self.handle_raycast(hit_cell, None, extended=True, recursed=True, to_coords=target, depth=depth+1, emitter=emitter)
                 return
+            elif hit_cell.state == GLASS:
+                target = (self.pointer_x, self.pointer_y)
+                self.handle_raycast(hit_cell, None, extended=True, recursed=True, to_coords=target, depth=depth+1, emitter=emitter)
+                return
+            elif hit_cell.state == CRYSTAL:
+                hit_cell.crystal_glow += 50
 
             if random.random() < 0.2 / (1 + dist / 10): # random chance to have a reaction happen
                 if hit_cell.state == WATER:
@@ -611,7 +619,18 @@ class Grid:
                     emitter.uraniumdecaystage += 1
 
     def handle_crystal(self, cell: Cell):
-        ...
+        if cell.crystal_glow > 1:
+            cell.crystal_glow -= 1
+            if cell.crystal_glow > 50:
+                cell.crystal_glow -= 2
+                if cell.crystal_glow > 100:
+                    cell.crystal_glow -= 3
+        if random.random() < 1/(cell.light_level**2):
+            n: tuple[Cell, ...] = neighbours(cell, self, 3, True)
+            for nearby in n:
+                if nearby.state == WATER:
+                    nearby.state = CRYSTAL
+                    nearby.crystal_glow = 250
 
     def handle_glass(self, cell: Cell):
         ...
@@ -629,10 +648,10 @@ class Grid:
             return
 
         if above and above.type() == "powder":
-            if second.update and first.state != AIR and second.type() not in ("solid", "fire"):
+            if second.update and first.state != AIR and (second.type() not in ("solid", "fire") or second.state != GLASS):
                 self.swap(above, second)
                 second.update = False
-            elif first.update and second.state != AIR and first.type() not in ("solid", "fire"):
+            elif first.update and second.state != AIR and (first.type() not in ("solid", "fire") or first.state != GLASS):
                 self.swap(above, first)
                 first.update = False
 
@@ -658,6 +677,7 @@ class Grid:
                     nearby.uraniumdecaystage = max(0, nearby.uraniumdecaystage - 1)
             elif nearby.state == STEAM:
                 nearby.state = WATER
+
 
     def handle_pointer(self, key):
         if key == "w":
@@ -863,6 +883,17 @@ class Grid:
             elif key == "[" and UNDO_LIST:
                 self.restore_undo()
 
+    def handle_bulbpos(self, key):
+        global BULB_POS
+        if key == "SHIFTUP":
+            BULB_POS[1] -= 1
+        elif key == "SHIFTDOWN":
+            BULB_POS[1] += 1
+        elif key == "SHIFTLEFT":
+            BULB_POS[0] -= 1
+        elif key == "SHIFTRIGHT":
+            BULB_POS[0] += 1
+        
     def record_undo(self):
         global UNDO_LIST
         raw = (c.state for row in self.matrix for c in row)
@@ -981,7 +1012,7 @@ class Grid:
                 if add_hue is not None:
                     current_cell.add_hue = add_hue * prev_light//100
                 if current_cell.state == CRYSTAL:
-                    add_hue = 240 + 60 * math.sin(FRAMENUM * 0.05)
+                    add_hue = 240 + 60 * math.sin(FRAMENUM * 0.05 * current_cell.crystal_glow)
 
         for row in self.matrix:
             for cell in row:
@@ -989,7 +1020,8 @@ class Grid:
                     self.illuminate(cell)
 
     def display(self, cell: Cell):
-        global HUE, PROFILE, FRAMENUM
+        global HUE, PROFILE, FRAMENUM, DEBUGVAR
+        DEBUGVAR = str(self.matrix[self.pointer_y][self.pointer_x].crystal_glow)
 
         symbol: str = None
         hsv: tuple[int] = None
@@ -1006,7 +1038,7 @@ class Grid:
                 symbol = "◈"
             elif symbol == "◙":
                 symbol = "◆"
-            elif symbol == "▢":
+            elif symbol in ("▢","◍"):
                 symbol = "◇"
             else:
                 symbol = "?"
@@ -1027,7 +1059,7 @@ class Grid:
                     center = (min_hue + max_hue) / 2  # 240
                     amplitude = (max_hue - min_hue) / 2  # 60
                     speed = 0.05
-                    hue = center + amplitude * math.sin(FRAMENUM * speed)
+                    hue = center + amplitude * math.sin(FRAMENUM * speed * cell.crystal_glow)
                     hsv = (hue, 75, 75)
 
             if s != AIR:
@@ -1041,6 +1073,9 @@ class Grid:
 
         if cell.contaminated and self.show_radiation_lines:
             hsv = (0, 0, 100)
+
+        # if not random.random() < 1/cell.crystal_glow:
+        #     hsv = (random.randint(0, 360), random.randint(1, 100), random.randint(1, 100))
 
         return (symbol, hsv)
 
@@ -1201,59 +1236,83 @@ def color(str: str, hsv: tuple = None, rgb: tuple = None):
     return f"\033[38;2;{r};{g};{b}m{str}\033[0m"
 
 def get_keypress():
-    '''Silently checks for input.
+  '''Silently checks for input.
     Tab: tab
-    Caps Lock: caps lock
-    Enter: enter
-    Ctrl: ^
-    Alt: *'''
-    if sys.platform == "win32":
-        import msvcrt
-        if not msvcrt.kbhit():
-            return None         
-        
-        ch = msvcrt.getch()
-        
-        # Handle extended keys / Alt combinations (start with \x00 or \xe0)
-        if ch in (b'\x00', b'\xe0'):
-            ch2 = msvcrt.getch()
-            
-            # Map standard arrow keys
-            arrow_map = {'H': 'UP', 'P': 'DOWN', 'K': 'LEFT', 'M': 'RIGHT'}
-            if ch2.decode('utf-8', errors='ignore') in arrow_map:
-                return arrow_map.get(ch2.decode('utf-8', errors='ignore'))
-            
-            # Map Alt + letter scan codes on Windows (e.g., Alt + x is scan code 45)
-            alt_scan_codes = {
-                30: 'a', 48: 'b', 46: 'c', 32: 'd', 18: 'e', 33: 'f', 34: 'g', 
-                35: 'h', 23: 'i', 36: 'j', 37: 'k', 38: 'l', 50: 'm', 49: 'n', 
-                24: 'o', 25: 'p', 16: 'q', 19: 'r', 31: 's', 20: 't', 22: 'u', 
-                47: 'v', 17: 'w', 45: 'x', 21: 'y', 44: 'z'
-            }
-            code = ord(ch2)
-            if code in alt_scan_codes:
-                return f"*{alt_scan_codes[code]}"
-            
-            return None
+    Enter: enter'''
+  if sys.platform == 'win32':
+    import ctypes
+    import msvcrt
 
-        # Handle Enter key
-        if ch in (b'\r', b'\n'):
-            return 'enter'
-        
-        # Handle Tab key
-        if ch == b'\t':
-            return 'tab'
+    if not msvcrt.kbhit():
+      return None
 
-        # Handle Ctrl + key (ASCII values 1 to 26 represent Ctrl+A through Ctrl+Z)
-        val = ord(ch)
-        if 1 <= val <= 26:
-            letter = chr(val + 96)
-            return f"^{letter}"
+    ch = msvcrt.getch()
 
-        decoded = ch.decode('utf-8', errors='ignore')
-        
-        return decoded
+    # Handle extended keys / Alt combinations (start with \x00 or \xe0)
+    if ch in (b'\x00', b'\xe0'):
+      ch2 = msvcrt.getch()
+      key_char = ch2.decode('utf-8', errors='ignore')
 
+      # Map standard arrow keys (+ Shift detection via Win32 API)
+      arrow_map = {'H': 'UP', 'P': 'DOWN', 'K': 'LEFT', 'M': 'RIGHT'}
+      if key_char in arrow_map:
+        shift_held = bool(ctypes.windll.user32.GetAsyncKeyState(0x10) & 0x8000)
+        prefix = 'SHIFT' if shift_held else ''
+        return f'{prefix}{arrow_map[key_char]}'
+
+      # Map Alt + letter scan codes on Windows (e.g., Alt + x is scan code 45)
+      alt_scan_codes = {
+          30: 'a',
+          48: 'b',
+          46: 'c',
+          32: 'd',
+          18: 'e',
+          33: 'f',
+          34: 'g',
+          35: 'h',
+          23: 'i',
+          36: 'j',
+          37: 'k',
+          38: 'l',
+          50: 'm',
+          49: 'n',
+          24: 'o',
+          25: 'p',
+          16: 'q',
+          19: 'r',
+          31: 's',
+          20: 't',
+          22: 'u',
+          47: 'v',
+          17: 'w',
+          45: 'x',
+          21: 'y',
+          44: 'z',
+      }
+      code = ord(ch2)
+      if code in alt_scan_codes:
+        return f'*{alt_scan_codes[code]}'
+
+      return None
+
+    # Handle Enter key
+    if ch in (b'\r', b'\n'):
+      return 'enter'
+
+    # Handle Tab key
+    if ch == b'\t':
+      return 'tab'
+
+    # Handle Ctrl + key (ASCII values 1 to 26 represent Ctrl+A through Ctrl+Z)
+    val = ord(ch)
+    if 1 <= val <= 26:
+      letter = chr(val + 96)
+      return f'^{letter}'
+
+    decoded = ch.decode('utf-8', errors='ignore')
+
+    return decoded
+  
 def hide_terminal_cursor():
     sys.stdout.write("\033[?25l")
 
@@ -1279,7 +1338,7 @@ def main():
     L, B = 30, 30 # length and height of the grid [default: 30x30]
 
     MIN_BRUSH_SIZE = 0 # [default: 0]
-    MAX_BRUSH_SIZE = 30 # [default: 7]
+    MAX_BRUSH_SIZE = 10 # [default: 7]
     DEFAULT_BRUSH_SIZE = 1
 
     FRAMERATE = 60 # decrease if experiencing stutter [default: 60]
@@ -1291,7 +1350,7 @@ def main():
     PAUSED = False
 
     DYNAMIC_LIGHTING = True # [default: True]
-    BULB_POS = (L//2, -5) # the position of the main light source [default: (L//2, -B)]
+    BULB_POS = [L//2, -5] # the position of the main light source [default: (L//2, -B)]
 
     RAINBOW_SAND = False
     RBS_COUNTER = 0
@@ -1448,6 +1507,7 @@ def main():
         grid.handle_clear(pressed_key)
         grid.handle_paused(pressed_key)
         grid.handle_shuffle(pressed_key)
+        grid.handle_bulbpos(pressed_key)
 
         handle_RBS(pressed_key)
         handle_framerate(pressed_key)
@@ -1481,7 +1541,7 @@ def main():
         f"Frame Rate: [{FRAMERATE}]",
         f"Gravity: {gravity_set[grid.orientation]} ",
         f"Simulation: {pause_set[PAUSED]}",
-        f"LL:{grid.matrix[grid.pointer_y][grid.pointer_x].light_level}",
+        f"Bulb: {BULB_POS}",
         f"FPS: {min(99, 100/performance):.2f} [{100/max_perf:.2f}]", DEBUGVAR
     ])
         else:
