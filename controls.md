@@ -12,9 +12,11 @@
 - `Shift + Q` and `Shift + E` to cycle through **brush shapes**.
 - `=` & `-`to cycle through **brush sizes**.
 
-## Shifting Gravity
+## Environment Manipulation
 
+- `tab` to **shuffle** the entire sandbox.
 - `→↑↓←` for shifting **gravity**.
+- `Shift + →↑↓←` to move the position of the **bulb**.
 
 ## Time Manipulation
 
@@ -25,7 +27,6 @@
 ## Miscellaneous
 
 - `Shift + C` to **clear** the entire sandbox.
-- `tab` to **shuffle** the entire sandbox.
 - `` ` `` to stop **cursor RGB**.
 - `/` to turn off radiation visuals.
 - `?secret code?` for an **easter egg**!

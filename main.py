@@ -4,8 +4,9 @@ from time import sleep, perf_counter
 from colorsys import hsv_to_rgb
 import math
 from collections import deque
+import shutil
 
-AIR, SAND, WATER, STEEL, ACID, STEAM, DRYWOOD, WETWOOD, FIRE, LAVA, OBSIDIAN, GUNPOWDER, FUSE, URANIUM, CRYSTAL, GLASS, GRAPHITE, ICE, FOSSILFUEL, FUMES = \
+AIR, SAND, WATER, STEEL, ACID, STEAM, DRYWOOD, WETWOOD, FIRE, LAVA, OBSIDIAN, GUNPOWDER, FUSE, URANIUM, CRYSTAL, GLASS, GRAPHITE, ICE, OIL, FUMES = \
       0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19
 
 class Timer:
@@ -117,7 +118,7 @@ class Grid:
             for y in range(0, self.height):
                 self.matrix[y][x].add_hue = None
 
-    def up(self, cell, n: int = 1, static = False):
+    def up(self, cell, n: int = 1, static = False) -> Cell:
         if not cell:
             return False
         if static:
@@ -141,7 +142,7 @@ class Grid:
         else:
             return False
 
-    def down(self, cell, n: int = 1, static = False):
+    def down(self, cell, n: int = 1, static = False) -> Cell:
         if not cell:
             return False
         if static:
@@ -165,7 +166,7 @@ class Grid:
         else:
             return False
 
-    def left(self, cell, n: int = 1, static = False):
+    def left(self, cell, n: int = 1, static = False) -> Cell:
         if not cell:
             return False
         if static:
@@ -189,7 +190,7 @@ class Grid:
         else:
             return False
 
-    def right(self, cell, n: int = 1, static = False):
+    def right(self, cell, n: int = 1, static = False) -> Cell:
         if not cell:
             return False
         if static:
@@ -214,20 +215,26 @@ class Grid:
             return False
 
     def update(self):
+        global FRAMENUM
         self.reset_update_flags()
-        if self.orientation == "up":
-            matrixrange = (range(0, self.length), range(self.height-1, -1, -1))
-        elif self.orientation == "down":
-            matrixrange = (range(0, self.length), range(0, self.height))
-        elif self.orientation == "left":
-            matrixrange = (range(self.length-1 , -1, -1), range(0, self.height))
-        elif self.orientation == "right":
-            matrixrange = (range(0, self.length), range(0, self.height))
 
-        for x in matrixrange[0]:
-            for y in matrixrange[1]:
+        vertical = self.orientation in ("up", "down")
+        if vertical:
+            outer_range = range(self.height - 1, -1, -1) if self.orientation == "up" else range(self.height)
+            inner_len = self.length
+        else:
+            outer_range = range(self.length - 1, -1, -1) if self.orientation == "left" else range(self.length)
+            inner_len = self.height
 
-                cell = self.matrix[y][x] 
+        for outer in outer_range:
+            if (outer + FRAMENUM) % 2 == 0:
+                inner_range = range(inner_len - 1, -1, -1)
+            else:
+                inner_range = range(inner_len)
+
+            for inner in inner_range:
+                x, y = (inner, outer) if vertical else (outer, inner)
+                cell = self.matrix[y][x]
 
                 if cell.state != URANIUM:
                     cell.uraniumdecaystage = 0
@@ -259,6 +266,12 @@ class Grid:
                     self.handle_graphite(cell)
                 elif cell.state == ICE:
                     self.handle_ice(cell)
+                elif cell.state == OIL:
+                    self.handle_oil(cell)
+                elif cell.state == FUMES:
+                    self.handle_fumes(cell)
+
+# MARK: Elements
 
     def handle_sand(self, cell: Cell):
         if random.randint(0,1):
@@ -279,12 +292,12 @@ class Grid:
             self.down(second).update = False
 
         # for swapping with water (density swap)
-        elif self.down(cell) and self.down(cell).state == WATER:
+        elif self.down(cell) and self.down(cell).state in (WATER, OIL):
             self.swap(cell, self.down(cell))
-        elif cell.update and self.down(cell) and first and self.down(first).state == WATER:
+        elif cell.update and self.down(cell) and first and self.down(first).state in (WATER, OIL):
             self.swap(cell, self.down(first))
             self.down(first).update = False
-        elif cell.update and self.down(cell) and second and self.down(second).state == WATER:
+        elif cell.update and self.down(cell) and second and self.down(second).state in (WATER, OIL):
             self.swap(cell, self.down(second))
             self.down(second).update = False
 
@@ -297,13 +310,13 @@ class Grid:
             second = self.left(cell)
 
         # for normal gravity 
-        if self.down(cell) and self.down(cell).state == AIR:
+        if self.down(cell) and self.down(cell).state in (AIR, OIL):
             self.swap(cell, self.down(cell))
-            self.down(cell).update = False # potentially breaking
-        elif cell.update and first and first.state == AIR:
+            self.down(cell).update = False 
+        elif cell.update and first and first.state in (AIR, OIL):
             self.swap(cell, first)
             first.update = False
-        elif cell.update and second and second.state == AIR:
+        elif cell.update and second and second.state in (AIR, OIL):
             self.swap(cell, second)
             second.update = False
 
@@ -349,12 +362,14 @@ class Grid:
                     nearby.uraniumdecaystage = 0
                     cell.state = WATER
                     return
+            elif nearby.state == CRYSTAL:
+                nearby.crystal_glow += 2
                     
 
         # for normal gravity 
         if self.down(cell) and self.down(cell).state == AIR:
             self.swap(cell, self.down(cell))
-            self.down(cell).update = False # potentially breaking
+            self.down(cell).update = False 
         elif cell.update and first and first.state == AIR:
             self.swap(cell, first)
             first.update = False
@@ -363,6 +378,17 @@ class Grid:
             second.update = False
 
     def handle_steam(self, cell: Cell):
+        # condensation
+        up_cell = self.up(cell)
+        if (up_cell is None) or (up_cell.type() in ("solid", "glass")):
+            if random.random() < 0.01:
+                cell.state = WATER
+                return
+            
+        swappable = (AIR, SAND, WATER, ACID, FIRE, GUNPOWDER, URANIUM, OIL, FUMES)
+        self.gas_behavior(cell, up_cell, swappable)
+
+    def gas_behavior(self, cell, up_cell, swappable):
         if random.randint(0,1):
             first = self.left(cell)
             second = self.right(cell)
@@ -370,20 +396,14 @@ class Grid:
             first = self.right(cell)
             second = self.left(cell)
 
-        # condensation
-        if (self.up(cell) is None) or (self.up(cell).is_static()):
-            if random.random() < 0.01:
-                cell.state = WATER
-                return
-
         # normal gravity
-        if self.up(cell) and cell.update and self.up(cell).state in (AIR, SAND, WATER, ACID, FIRE, GUNPOWDER, URANIUM):
-            self.swap(cell, self.up(cell))
-            self.up(cell).update = False # potentially breaking
-        elif cell.update and self.up(cell) and first and self.up(first).state in (AIR, SAND, WATER, ACID, FIRE, GUNPOWDER, URANIUM):
+        if up_cell and cell.update and up_cell.state in swappable:
+            self.swap(cell, up_cell)
+            up_cell.update = False 
+        elif cell.update and up_cell and first and self.up(first).state in swappable:
             self.swap(cell, self.up(first))
             self.up(first).update = False
-        elif cell.update and self.up(cell) and second and self.up(second).state in (AIR, SAND, WATER, ACID, FIRE, GUNPOWDER, URANIUM):
+        elif cell.update and up_cell and second and self.up(second).state in swappable:
             self.swap(cell, self.up(second))
             self.up(second).update = False
         elif cell.update and first and first.state == AIR:
@@ -420,23 +440,29 @@ class Grid:
         for current in n: # else,
             if current.state == WATER:
                 cell.state = AIR
-            elif current.state in (GUNPOWDER, FUSE) and cell.update:
-                current.state = FIRE
-                current.update = False
-            if current.state == ICE and cell.update:
-                current.state = WATER
-                current.update = False
-            if current.state == DRYWOOD and cell.update and random.random() < 0.1:
-                for nearby in n:
-                    if nearby.state == AIR and random.random() < 0.75:
-                        nearby.state = FIRE
-                        nearby.update = False
-                if random.random() < 0.01:
-                    current.state = AIR
-            if current.state == WETWOOD and cell.update and random.random() < 0.01:
-                current.state = DRYWOOD
-                cell.state = STEAM
-                current.update = False
+            if cell.update:
+                if current.state in (GUNPOWDER, FUSE):
+                    current.state = FIRE
+                    current.update = False
+                if current.state == ICE:
+                    current.state = WATER
+                    current.update = False
+                if current.state in (DRYWOOD, OIL) and random.random() < 0.1:
+                    for nearby in n:
+                        if nearby.state == AIR and random.random() < 0.75:
+                            nearby.state = FIRE
+                            nearby.update = False
+                    if current.state == DRYWOOD and random.random() < 0.01:
+                        current.state = AIR
+                    if current.state == OIL and random.random() < 0.1:
+                        current.state = AIR
+                if current.state == WETWOOD and random.random() < 0.01:
+                    current.state = DRYWOOD
+                    cell.state = STEAM
+                    current.update = False
+                if current.state == FUMES:
+                    current.state = FIRE
+                    current.update = False
 
     def handle_lava(self, cell):
         global FRAMENUM
@@ -477,8 +503,10 @@ class Grid:
                     nearby.state = WATER
                     cell.state = LAVA
                     return
-                elif nearby.state == GRAPHITE and random.random() < 0.01:
-                    nearby.state == GUNPOWDER
+                elif nearby.state == GRAPHITE and random.random() < 0.001:
+                    nearby.state = GUNPOWDER
+                elif nearby.state in (OIL, FUMES):
+                    nearby.state = FIRE
                     
             below = self.down(cell)
             if below and below.state == FIRE:
@@ -617,6 +645,12 @@ class Grid:
                 elif hit_cell.state == ICE:
                     hit_cell.state = WATER
                     emitter.uraniumdecaystage += 1
+                elif hit_cell.state == OIL:
+                    hit_cell.state = FUMES
+                    emitter.uraniumdecaystage += 1
+                elif hit_cell.state == FUMES:
+                    hit_cell.state = FIRE
+                    emitter.uraniumdecaystage += 1
 
     def handle_crystal(self, cell: Cell):
         if cell.crystal_glow > 1:
@@ -648,12 +682,16 @@ class Grid:
             return
 
         if above and above.type() == "powder":
-            if second.update and first.state != AIR and (second.type() not in ("solid", "fire") or second.state != GLASS):
-                self.swap(above, second)
-                second.update = False
-            elif first.update and second.state != AIR and (first.type() not in ("solid", "fire") or first.state != GLASS):
-                self.swap(above, first)
-                first.update = False
+            if second.update and first.state != AIR:
+                if (second.type() not in ("solid", "fire", "glass")):
+                    if (first.type() not in ("solid", "fire", "glass")):
+                        self.swap(above, second)
+                        second.update = False
+            elif first.update and second.state != AIR:
+                if (first.type() not in ("solid", "fire", "glass")):
+                    if (second.type() not in ("solid", "fire", "glass")):
+                        self.swap(above, first)
+                        first.update = False
 
     def handle_ice(self, cell: Cell):
         try:
@@ -678,6 +716,38 @@ class Grid:
             elif nearby.state == STEAM:
                 nearby.state = WATER
 
+    def handle_oil(self, cell: Cell):
+        if random.randint(0,1):
+            first = self.left(cell)
+            second = self.right(cell)
+        else:
+            first = self.right(cell)
+            second = self.left(cell)
+
+        # for normal gravity 
+        if self.down(cell) and self.down(cell).state in (AIR, FIRE):
+            self.swap(cell, self.down(cell))
+            self.down(cell).update = False 
+        elif cell.update and first and first.state == AIR:
+            self.swap(cell, first)
+            first.update = False
+        elif cell.update and second and second.state == AIR:
+            self.swap(cell, second)
+            second.update = False
+
+    def handle_fumes(self, cell: Cell):
+        up_cell = self.up(cell)
+        if random.randint(0,1):
+            first = self.left(cell)
+            second = self.right(cell)
+        else:
+            first = self.right(cell)
+            second = self.left(cell)
+
+        swappable = (AIR, SAND, WATER, ACID, FIRE, GUNPOWDER, URANIUM, OIL)
+        self.gas_behavior(cell, up_cell, swappable)
+        
+# MARK: End Elements
 
     def handle_pointer(self, key):
         if key == "w":
@@ -1079,12 +1149,11 @@ class Grid:
 
         return (symbol, hsv)
 
-    def show(self, extra=0):
-        global HUE
+    def show(self, extra=0, padding="     "):
+        global HUE, FRAMENUM
         self.dynamic_lights()
-        grid = "╔" + ("═"*(2*self.length+1)) + "╗" + "\n"
         span = max_len(extra)+6
-        padding = "     "
+        grid = "╔" + ("═"*(2*self.length+1)) + "╗" + padding + "   " + " "*span + "\n"
 
         for rownum, row in enumerate(self.matrix):
             grid += "║ "
@@ -1103,6 +1172,7 @@ class Grid:
                 grid += "\n"
             else:
                 grid += "║\n"
+        
         reset_terminal_cursor_pos()
         sys.stdout.write(grid)
         sys.stdout.write("╚" + ("═"*(2*self.length+1)) + "╝")
@@ -1197,7 +1267,7 @@ def average(*args):
 
 def handle_RBS(key):
     global RAINBOW_SAND, RBS_COUNTER
-    code = "689689689"
+    code = "itchio"
 
     if key is None:
         return
@@ -1309,6 +1379,9 @@ def get_keypress():
       letter = chr(val + 96)
       return f'^{letter}'
 
+    if ch == b"\x1b":
+        return "esc"
+
     decoded = ch.decode('utf-8', errors='ignore')
 
     return decoded
@@ -1327,6 +1400,73 @@ def clear_terminal_line():
 
 def reset_terminal_cursor_pos():
     sys.stdout.write("\033[H")
+
+# MARK: mains
+
+def menu_loop():
+    while True:
+        pressed_key = get_keypress()
+        if pressed_key in ("enter", " "):
+            wipe_terminal_screen()
+            return
+        sys.stdout.write("\rWELCOME")
+        ...
+
+def game_loop(HUE_CHANGE, gravity_set, pause_set, shapes_set, grid, timer):
+    global HUE, FRAMENUM, PERFORMANCE_MODE, UNDO_LIST, PROFILE, PAUSED, BULB_POS
+    while True:
+        pressed_key = get_keypress()
+
+        if pressed_key == "esc":
+            wipe_terminal_screen()
+            return
+
+        ticked = False
+
+        if not PAUSED and timer.diff() > (1/FRAMERATE):
+            grid.record_undo()
+            grid.update()
+            timer.reset()
+            HUE += HUE_CHANGE
+            FRAMENUM += 1
+            ticked = True
+
+        grid.handle_pointer(pressed_key)
+        grid.handle_action(pressed_key)
+        grid.handle_brush_attributes(pressed_key, shapes_set)
+        grid.handle_orientation(pressed_key)
+        grid.handle_clear(pressed_key)
+        grid.handle_paused(pressed_key)
+        grid.handle_shuffle(pressed_key)
+        grid.handle_bulbpos(pressed_key)
+
+        handle_RBS(pressed_key)
+        handle_framerate(pressed_key)
+
+        if grid.brush_size == 0:
+            grid.show_pointer = 0
+        else:
+            grid.show_pointer = 1
+
+        if pressed_key == "`":
+            HUE_CHANGE = 1 - HUE_CHANGE
+        if pressed_key == "/":
+            grid.show_radiation_lines = not grid.show_radiation_lines
+
+        if PERFORMANCE_MODE:
+            UNDO_LIST.maxlen = 100
+
+        if ticked or pressed_key is not None:
+            grid.show(extra=[   
+        f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{PROFILE[grid.matrix[grid.pointer_y][grid.pointer_x].state]["name"]}]", 
+        f"Brush: <{grid.brush_size}px> ({PROFILE[grid.brush_type]["name"]}) [{shapes_set[grid.brush_shape]}]",
+        f"Frame Rate: [{FRAMERATE}]",
+        f"Gravity: {gravity_set[grid.orientation]} ",
+        f"Simulation: {pause_set[PAUSED]}",
+        f"Bulb: {BULB_POS}",
+    ])
+        else:
+            sleep(0.002)
 
 def main():
     global FRAMENUM, FRAMERATE, DYNAMIC_LIGHTING, BULB_POS, \
@@ -1388,7 +1528,7 @@ def main():
                "transparency": 4,
                "weight": 1},
         STEAM : {"name": "Steam",
-               "symbol": "◍",
+               "symbol": "◌",
                "color": (80, 2, 40),
                "transparency": 4,
                "weight": 0},
@@ -1451,6 +1591,16 @@ def main():
                "symbol": "◙",
                "color": (200, 80, 100),
                "transparency": 4,
+               "weight": 0},
+        OIL : {"name": "Oil",
+               "symbol": "■",
+               "color": (230, 80, 20),
+               "transparency": 6,
+               "weight": 2},
+        FUMES : {"name": "Fumes",
+               "symbol": "◌",
+               "color": (60, 100, 50),
+               "transparency": 4,
                "weight": 0}
     }
 
@@ -1464,88 +1614,20 @@ def main():
                 "◙": "solid",
                 "●": "fire",
                 "▢": "glass",
-                "◍": "gas"
+                PROFILE[STEAM]["symbol"]: "gas"
             }
 
     wipe_terminal_screen()
     hide_terminal_cursor()
     clear_terminal_line()
     grid = Grid(L,B)
-    grid.show(extra=[   
-    f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{PROFILE[grid.matrix[grid.pointer_y][grid.pointer_x].state]["name"]}]",
-    f"Brush: <{grid.brush_size}px> ({PROFILE[grid.brush_type]["name"]}) [{shapes_set[grid.brush_shape]}]", 
-    f"Frame Rate: [{(FRAMERATE):.0f}]",
-    f"Gravity: {gravity_set[grid.orientation]} ",
-    f"Simulation: {pause_set[PAUSED]} ", DEBUGVAR
-])
 
     timer = Timer()
-    # DEBUG
-    perf = Timer()
-    performance = perf.diff()
-    max_perf = performance
-    # /DEBUG
 
-    # main loop 
+    # main loops
     while True:
-        perf.reset() # debug
-        pressed_key = get_keypress()
-        ticked = False
-
-        if not PAUSED and timer.diff() > (1/FRAMERATE):
-            grid.record_undo()
-            grid.update()
-            timer.reset()
-            HUE += HUE_CHANGE
-            FRAMENUM += 1
-            ticked = True
-
-        grid.handle_pointer(pressed_key)
-        grid.handle_action(pressed_key)
-        grid.handle_brush_attributes(pressed_key, shapes_set)
-        grid.handle_orientation(pressed_key)
-        grid.handle_clear(pressed_key)
-        grid.handle_paused(pressed_key)
-        grid.handle_shuffle(pressed_key)
-        grid.handle_bulbpos(pressed_key)
-
-        handle_RBS(pressed_key)
-        handle_framerate(pressed_key)
-
-        if grid.brush_size == 0:
-            grid.show_pointer = 0
-        else:
-            grid.show_pointer = 1
-
-        if pressed_key == "`":
-            HUE_CHANGE = 1 - HUE_CHANGE
-        if pressed_key == "/":
-            grid.show_radiation_lines = not grid.show_radiation_lines
-
-        if PERFORMANCE_MODE:
-            UNDO_LIST.maxlen = 100
-
-        if ticked or pressed_key is not None:
-            # DEBUG
-            performance = perf.diff()*1000
-            if performance > max_perf:
-                # max_perf = average(max_perf, performance)
-                max_perf = performance
-            if pressed_key == "0":
-                max_perf = 1
-            # /DEBUG
-
-            grid.show(extra=[   
-        f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{PROFILE[grid.matrix[grid.pointer_y][grid.pointer_x].state]["name"]}]", 
-        f"Brush: <{grid.brush_size}px> ({PROFILE[grid.brush_type]["name"]}) [{shapes_set[grid.brush_shape]}]",
-        f"Frame Rate: [{FRAMERATE}]",
-        f"Gravity: {gravity_set[grid.orientation]} ",
-        f"Simulation: {pause_set[PAUSED]}",
-        f"Bulb: {BULB_POS}",
-        f"FPS: {min(99, 100/performance):.2f} [{100/max_perf:.2f}]", DEBUGVAR
-    ])
-        else:
-            sleep(0.002)
+        menu_loop()
+        game_loop(HUE_CHANGE, gravity_set, pause_set, shapes_set, grid, timer)
 
 
 if __name__ == "__main__":
