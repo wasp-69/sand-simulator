@@ -6,8 +6,8 @@ import math
 from collections import deque
 import shutil
 
-AIR, SAND, WATER, STEEL, ACID, STEAM, DRYWOOD, WETWOOD, FIRE, LAVA, OBSIDIAN, GUNPOWDER, FUSE, URANIUM, CRYSTAL, GLASS, GRAPHITE, ICE, OIL, FUMES = \
-      0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19
+AIR, SAND, WATER, STEEL, ACID, STEAM, DRYWOOD, WETWOOD, FIRE, LAVA, OBSIDIAN, GUNPOWDER, FUSE, URANIUM, CRYSTAL, GLASS, GRAPHITE, ICE, OIL, FUMES, CLONER, PUMP = \
+      0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21
 
 class Timer:
 
@@ -270,6 +270,10 @@ class Grid:
                     self.handle_oil(cell)
                 elif cell.state == FUMES:
                     self.handle_fumes(cell)
+                elif cell.state == CLONER:
+                    self.handle_cloner(cell)
+                elif cell.state == PUMP:
+                    self.handle_pump(cell)
 
 # MARK: Elements
 
@@ -301,7 +305,7 @@ class Grid:
             self.swap(cell, self.down(second))
             self.down(second).update = False
 
-    def handle_water(self, cell):
+    def handle_water(self, cell: Cell):
         if random.randint(0,1):
             first = self.left(cell)
             second = self.right(cell)
@@ -324,7 +328,7 @@ class Grid:
         # find to which side, left or right, does more empty cells exist
         # then move to that side
 
-    def handle_acid(self, cell):
+    def handle_acid(self, cell: Cell):
         if random.randint(0,1):
             first = self.left(cell)
             second = self.right(cell)
@@ -388,7 +392,7 @@ class Grid:
         swappable = (AIR, SAND, WATER, ACID, FIRE, GUNPOWDER, URANIUM, OIL, FUMES)
         self.gas_behavior(cell, up_cell, swappable)
 
-    def gas_behavior(self, cell, up_cell, swappable):
+    def gas_behavior(self, cell: Cell, up_cell: Cell, swappable):
         if random.randint(0,1):
             first = self.left(cell)
             second = self.right(cell)
@@ -413,7 +417,7 @@ class Grid:
             self.swap(cell, second)
             second.update = False
 
-    def handle_drywood(self, cell):
+    def handle_drywood(self, cell: Cell):
         # for normal gravity 
         if self.down(cell) and self.down(cell).state in (AIR, STEAM, FIRE):
             self.swap(cell, self.down(cell))
@@ -464,7 +468,7 @@ class Grid:
                     current.state = FIRE
                     current.update = False
 
-    def handle_lava(self, cell):
+    def handle_lava(self, cell: Cell):
         global FRAMENUM
 
         if FRAMENUM%3 == 0:
@@ -513,7 +517,7 @@ class Grid:
                 self.swap(cell, below)
             self.handle_water(cell)
 
-    def handle_obsidian(self, cell):
+    def handle_obsidian(self, cell: Cell):
         global PROFILE
         w = 0
         for i in range(1, min(16, cell.row + 1)):
@@ -529,7 +533,7 @@ class Grid:
         if w > 20:
             cell.state = AIR
 
-    def handle_gunpowder(self, cell):
+    def handle_gunpowder(self, cell: Cell):
         n: tuple[Cell] = neighbours(cell, self, 5, True)
 
         for nearby in n:
@@ -542,7 +546,7 @@ class Grid:
                 return
         self.handle_sand(cell)
 
-    def handle_fuse(self, cell):
+    def handle_fuse(self, cell: Cell):
         n: tuple[Cell] = neighbours(cell, self, 5, True)
 
         for nearby in n:
@@ -571,7 +575,7 @@ class Grid:
         self.handle_sand(cell)
 
     def handle_raycast(self, from_cell: Cell, to_cell: Cell, extended, recursed=False, to_coords: tuple = None, depth:int = 0, emitter: Cell = None):
-        global DEBUGVAR
+        global DEBUGVAR, PROFILE
         if depth >= 100:
             return
         if emitter is None:
@@ -651,15 +655,24 @@ class Grid:
                 elif hit_cell.state == FUMES:
                     hit_cell.state = FIRE
                     emitter.uraniumdecaystage += 1
+                elif hit_cell.state == CLONER:
+                    hit_cell.state = random.choice(list(PROFILE.keys()))
+                    emitter.uraniumdecaystage += 1
+                elif hit_cell.state == PUMP:
+                    self.up(hit_cell).state = random.choice(list(PROFILE.keys()))
+                    emitter.uraniumdecaystage += 1
 
     def handle_crystal(self, cell: Cell):
+        if cell.crystal_glow > 5000:
+            cell.state = GLASS
+            return
         if cell.crystal_glow > 1:
             cell.crystal_glow -= 1
             if cell.crystal_glow > 50:
                 cell.crystal_glow -= 2
                 if cell.crystal_glow > 100:
                     cell.crystal_glow -= 3
-        if random.random() < 1/(cell.light_level**2):
+        if (cell.light_level == 0) or (random.random() < 1/(cell.light_level**2)):
             n: tuple[Cell, ...] = neighbours(cell, self, 3, True)
             for nearby in n:
                 if nearby.state == WATER:
@@ -746,6 +759,21 @@ class Grid:
 
         swappable = (AIR, SAND, WATER, ACID, FIRE, GUNPOWDER, URANIUM, OIL)
         self.gas_behavior(cell, up_cell, swappable)
+
+    def handle_cloner(self, cell: Cell):
+        n: tuple[Cell] = neighbours(cell, self, 3, True)
+        for current in n:
+            if current.update:
+                if current.state not in (AIR, CLONER):
+                    cell.update = False
+                    cell.state = current.state
+
+    def handle_pump(self, cell: Cell):
+        up_cell = self.up(cell)
+        down_cell = self.down(cell)
+
+        if up_cell and down_cell and up_cell.state not in (AIR, PUMP) and down_cell.state in (AIR, PUMP):
+            down_cell.state = up_cell.state
         
 # MARK: End Elements
 
@@ -1601,6 +1629,16 @@ def main():
                "symbol": "◌",
                "color": (60, 100, 50),
                "transparency": 4,
+               "weight": 0},
+        CLONER : {"name": "Cloner",
+               "symbol": "⧆",
+               "color": (300, 100, 100),
+               "transparency": 0,
+               "weight": 0},
+        PUMP : {"name": "Pump",
+               "symbol": "🞒",
+               "color": (350, 80, 70),
+               "transparency": 6,
                "weight": 0}
     }
 
@@ -1614,7 +1652,9 @@ def main():
                 "◙": "solid",
                 "●": "fire",
                 "▢": "glass",
-                PROFILE[STEAM]["symbol"]: "gas"
+                PROFILE[STEAM]["symbol"]: "gas",
+                "⧆": "cloner",
+                "🞒": "pump"
             }
 
     wipe_terminal_screen()
@@ -1639,11 +1679,4 @@ if __name__ == "__main__":
         hide_terminal_cursor()
 # master
 
-# crystal: rays passing through this cast a hue [pink-blue-green]{oscillation} and also glows with radius 3, +Acid=Glass, +Uranium=HyperRainbow
-# ice: description on page
-# glass: sand+lava=glass, 0.5 light drop, uranium insensitive.
-# graphite: light-blocking, powders slip, no fire but lava burns it very slowly
-
-# portal symbols : ⬬ ⬭
-# extras : ⟡ ⬡ ⬣ ✦ ✡
 # cloner/pump : ⧆ or 🞒
