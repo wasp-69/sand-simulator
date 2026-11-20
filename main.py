@@ -22,6 +22,12 @@ class Timer:
         self.current_time = perf_counter()
         return self.current_time - self.starting_time
 
+class Achievement_Manager:
+    def init(self):
+        ...
+
+    def check_all(self):
+        ...
 class Cell:
 
     def __init__(self, row, col, state=AIR):
@@ -384,7 +390,7 @@ class Grid:
     def handle_steam(self, cell: Cell):
         # condensation
         up_cell = self.up(cell)
-        if (up_cell is None) or (up_cell.type() in ("solid", "glass")):
+        if (up_cell is None) or (up_cell.type() in ("solid", "glass", "pump")):
             if random.random() < 0.01:
                 cell.state = WATER
                 return
@@ -694,15 +700,16 @@ class Grid:
         if first is None or second is None:
             return
 
+        immovables = ("solid", "fire", "glass", "pump", "cloner")
         if above and above.type() == "powder":
             if second.update and first.state != AIR:
-                if (second.type() not in ("solid", "fire", "glass")):
-                    if (first.type() not in ("solid", "fire", "glass")):
+                if (second.type() not in immovables):
+                    if (first.type() not in immovables):
                         self.swap(above, second)
                         second.update = False
             elif first.update and second.state != AIR:
-                if (first.type() not in ("solid", "fire", "glass")):
-                    if (second.type() not in ("solid", "fire", "glass")):
+                if (first.type() not in immovables):
+                    if (second.type() not in immovables):
                         self.swap(above, first)
                         first.update = False
 
@@ -772,7 +779,7 @@ class Grid:
         up_cell = self.up(cell)
         down_cell = self.down(cell)
 
-        if up_cell and down_cell and up_cell.state not in (AIR, PUMP) and down_cell.state in (AIR, PUMP):
+        if up_cell and down_cell and up_cell.state not in (AIR) and down_cell.state in (AIR):
             down_cell.state = up_cell.state
         
 # MARK: End Elements
@@ -1177,7 +1184,7 @@ class Grid:
 
         return (symbol, hsv)
 
-    def show(self, extra=0, padding="     "):
+    def show(self, extra=0, padding="     ", popup: str = "", alpha : int = 0):
         global HUE, FRAMENUM
         self.dynamic_lights()
         span = max_len(extra)+6
@@ -1196,15 +1203,19 @@ class Grid:
             elif rownum == len(extra) + 1:
                 grid += f"║{padding}" + "╰" + "─" * span + "╯          " + "\n"
             elif extra and rownum != 0 and rownum < len(extra) + 1:
-                grid += f"║{padding}│   " + extra[rownum-1] + " " * (span-len(extra[rownum-1])-3) + "│          "
-                grid += "\n"
+                grid += f"║{padding}│   " + extra[rownum-1] + " " * (span-len(extra[rownum-1])-3) + "│          " + "\n"
+            elif popup != "" and rownum == self.height - 3:
+                grid += f"║{padding}" + color("╭" + "─" * (len(popup)+6) + "╮          ", hsv= (0,0,alpha)) + "\n"
+            elif popup != "" and rownum == self.height - 2:
+                grid += f"║{padding}" + color("│   " + popup + "   │", hsv=(0,0,alpha)) + "          " + "\n"
+            elif popup != "" and rownum == self.height - 1:
+                grid += f"║{padding}" + color("╰" + "─" * (len(popup)+6) + "╯          ", hsv= (0,0,alpha)) + "\n"
             else:
-                grid += "║\n"
+                grid += "║" + " "*2*span + "\n"
         
         reset_terminal_cursor_pos()
         sys.stdout.write(grid)
-        sys.stdout.write("╚" + ("═"*(2*self.length+1)) + "╝")
-        sys.stdout.write("\n")
+        sys.stdout.write("╚" + ("═"*(2*self.length+1)) + "╝" + "\n")
         sys.stdout.flush()
         self.reset_radiation_flags()
         self.reset_add_hue()
@@ -1294,7 +1305,7 @@ def average(*args):
     return s / len(args)
 
 def handle_RBS(key):
-    global RAINBOW_SAND, RBS_COUNTER
+    global RAINBOW_SAND, RBS_COUNTER, ACH_POPUP
     code = "itchio"
 
     if key is None:
@@ -1429,6 +1440,10 @@ def clear_terminal_line():
 def reset_terminal_cursor_pos():
     sys.stdout.write("\033[H")
 
+def terminal_background():
+    sys.stdout.write("\033]11;#000000\007")
+    sys.stdout.flush()
+
 # MARK: mains
 
 def menu_loop():
@@ -1440,14 +1455,22 @@ def menu_loop():
         sys.stdout.write("\rWELCOME")
         ...
 
-def game_loop(HUE_CHANGE, gravity_set, pause_set, shapes_set, grid, timer):
-    global HUE, FRAMENUM, PERFORMANCE_MODE, UNDO_LIST, PROFILE, PAUSED, BULB_POS
+def game_loop(HUE_CHANGE, gravity_set, pause_set, shapes_set, grid: Grid, timer):
+    global HUE, FRAMENUM, PERFORMANCE_MODE, UNDO_LIST, PROFILE, PAUSED, BULB_POS, ACH_POPUP, ALPHA
+    ACH_POPUP = ""
+    ALPHA = 100
     while True:
         pressed_key = get_keypress()
 
         if pressed_key == "esc":
             wipe_terminal_screen()
             return
+
+        if ACH_POPUP != "":
+            ALPHA -= 0.1
+        if ALPHA < 0:
+            ACH_POPUP = ""
+            ALPHA = 100
 
         ticked = False
 
@@ -1492,7 +1515,7 @@ def game_loop(HUE_CHANGE, gravity_set, pause_set, shapes_set, grid, timer):
         f"Gravity: {gravity_set[grid.orientation]} ",
         f"Simulation: {pause_set[PAUSED]}",
         f"Bulb: {BULB_POS}",
-    ])
+    ], popup=ACH_POPUP, alpha=ALPHA)
         else:
             sleep(0.002)
 
@@ -1660,7 +1683,8 @@ def main():
     wipe_terminal_screen()
     hide_terminal_cursor()
     clear_terminal_line()
-    grid = Grid(L,B)
+    terminal_background()
+    grid : Grid = Grid(L,B)
 
     timer = Timer()
 
