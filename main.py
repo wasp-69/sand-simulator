@@ -4,10 +4,11 @@ from time import sleep, perf_counter
 from colorsys import hsv_to_rgb
 import math
 from collections import deque
-import shutil
+import pygame.mixer as mixer
+import json
 
-AIR, SAND, WATER, STEEL, ACID, STEAM, DRYWOOD, WETWOOD, FIRE, LAVA, OBSIDIAN, GUNPOWDER, FUSE, URANIUM, CRYSTAL, GLASS, GRAPHITE, ICE, OIL, FUMES, CLONER, PUMP = \
-      0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21
+AIR, SAND, WATER, STEEL, ACID, STEAM, DRYWOOD, WETWOOD, FIRE, LAVA, OBSIDIAN, GUNPOWDER, FUSE, URANIUM, CRYSTAL, GLASS, GRAPHITE, ICE, OIL, FUMES, MORPH, PUMP, VOID = \
+      0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22
 
 class Timer:
 
@@ -22,12 +23,139 @@ class Timer:
         self.current_time = perf_counter()
         return self.current_time - self.starting_time
 
-class Achievement_Manager:
-    def init(self):
-        ...
+class Popup:
+    instances = []
+    def __init__(self, text):
+        self.text = text
+        self.alpha = 0
+        Popup.instances.append(self)
 
-    def check_all(self):
-        ...
+    def display(self):
+        self.alpha = 100
+
+    def update(self, dec):
+        self.alpha = max(0, self.alpha - dec)
+
+    @classmethod
+    def updateall(cls, dec):
+        for instance in cls.instances:
+            instance.update(dec)
+
+class TitleScreen:
+
+    def __init__(self):
+        self.TITLE = """
+ ████ █   █ ███ █████ █████ ███ █   █  ███            ████  ███  █   █ ████  
+█     █   █  █  █       █    █  ██  █ █              █     █   █ ██  █ █   █ 
+ ███  █████  █  ████    █    █  █ █ █ █  ██           ███  █████ █ █ █ █   █ 
+    █ █   █  █  █       █    █  █  ██ █   █              █ █   █ █  ██ █   █ 
+████  █   █ ███ █       █   ███ █   █  ███           ████  █   █ █   █ ████  
+
+
+
+"""
+        self.options = ["PLAY", "SETTINGS", "ABOUT", "EXIT"]
+        self.empty_ascii_dict = {
+        "PLAY": """
+┌┐      ┌┐ │  ┌┐ │ │\033[K
+││      ├┘ │  ├┤ └┬┘\033[K
+┴┘      ┴  ┴─ ┴┴  ┴ \033[K
+""",
+        "SETTINGS": """
+┌┐      ┌┐ ┌─ ┌┬┐ ┌┬┐ ┬ ┌┐│ ┌─ ┌┐\033[K
+││      └┐ ├─  │   │  │ │││ │┬ └┐\033[K
+┴┘      ┴┘ ┴─  ┴   ┴  ┴ ┴└┘ ┴┘ ┴┘\033[K
+""",
+        "ABOUT": """
+┌┐      ┌┐ ┌┐  ┌┐ ││ ┌┬┐\033[K
+││      ├┤ ├┴┐ ││ ││  │ \033[K
+┴┘      ┴┴ ┴─┘ ┴┘ ┴┘  ┴ \033[K
+""", 
+        "EXIT": """
+┌┐      ┌─ │┌┘ ┬ ┌┬┐\033[K
+││      ├─ └┼┐ │  │ \033[K
+┴┘      ┴─ ┌┘│ ┴  ┴ \033[K
+"""
+    }
+        self.check_ascii_dict = {
+        "PLAY": """
+┌─┐     ┌┐ │  ┌┐ │ │\033[K
+│■│     ├┘ │  ├┤ └┬┘\033[K
+┴─┘     ┴  ┴─ ┴┴  ┴ \033[K
+""",
+        "SETTINGS": """
+┌─┐     ┌┐ ┌─ ┌┬┐ ┌┬┐ ┬ ┌┐│ ┌─ ┌┐\033[K
+│■│     └┐ ├─  │   │  │ │││ │┬ └┐\033[K
+┴─┘     ┴┘ ┴─  ┴   ┴  ┴ ┴└┘ ┴┘ ┴┘\033[K
+""",
+        "ABOUT": """
+┌─┐     ┌┐ ┌┐  ┌┐ ││ ┌┬┐\033[K
+│■│     ├┤ ├┴┐ ││ ││  │ \033[K
+┴─┘     ┴┴ ┴─┘ ┴┘ ┴┘  ┴ \033[K
+""", 
+        "EXIT": """
+┌─┐     ┌─ │┌┘ ┬ ┌┬┐\033[K
+│■│     ├─ └┼┐ │  │ \033[K
+┴─┘     ┴─ ┌┘│ ┴  ┴ \033[K
+"""
+    }
+
+        self.rgb = 0
+        self.ht = 0
+        self.pointer = 0
+        self.key = None
+
+    def tick(self):
+        self.rgb += 0.001
+        if random.random() < 0.1: self.ht += 0.01
+
+        self.key = get_keypress()
+        self.handle_pointer()
+
+    def refresh(self):
+        reset_terminal_cursor_pos()
+
+        sys.stdout.write(self.handle_gradient())
+        sys.stdout.write(self.handle_options())
+
+        sys.stdout.flush()
+
+    def handle_pointer(self):
+        if self.key in ("DOWN", "S", "s"):
+            self.pointer = (self.pointer + 1) % len(self.options)
+        elif self.key in ("UP", "W", "w"):
+            self.pointer = (self.pointer - 1) % len(self.options)
+        elif self.key in (" ", "enter"):
+            ...
+
+    def handle_options(self) -> str:
+        screen = ""
+
+        for i, opt in enumerate(self.options):
+            if i == self.pointer:    screen +=  self.check_ascii_dict[opt]
+            else: screen += self.empty_ascii_dict[opt]
+            screen += "\033[K\n\033[K\n"
+
+        return screen
+
+    def handle_gradient(self) -> str:
+        gradient = []
+        title = self.TITLE.split("\n")
+        b = 0
+        s = math.sin
+        c = math.cos
+
+        for y, line in enumerate(title):
+            a = b
+            for x, letter in enumerate(line):
+                h = (s(self.ht) + c(2*self.rgb) - c(4*self.rgb) - s(self.rgb))
+                txt = color(letter, (h*100 + a + x+y, 50, 100))
+                gradient.append(txt)
+            b += 1
+            gradient.append("\n")
+
+        return "".join(gradient)
+    
 class Cell:
 
     def __init__(self, row, col, state=AIR):
@@ -49,15 +177,6 @@ class Cell:
         else:
             avg = average(math.sin(theta)*(self.row / height), math.cos(theta)*(self.col / length))
             return (avg * 360 ) + HUE 
-
-    def is_static(self):
-        return self.state in (STEEL, WETWOOD, OBSIDIAN, FUSE)
-
-    def is_edge(self, ignore_top = True):
-        if ignore_top:
-            return (self.col == 0 or self.col == 30 or self.row == 30)
-        else:
-            return (self.col == 0 or self.col == 30 or self.row == 30 or self.row == 0)
 
     def type(self):
         global PROFILE, TYPE_DICT
@@ -88,7 +207,6 @@ class Grid:
         self.matrix = [[Cell(row=row, col=col) for col in range(length)]
                        for row in range(height)]
         self.edges = self.get_edges(True)                                      # with the top one
-        self.bounds = self.get_edges(True)
 
         self.glow_kernel = [[0] * 11 for _ in range(11)] 
         for y, row in enumerate(self.glow_kernel):
@@ -126,7 +244,7 @@ class Grid:
 
     def up(self, cell, n: int = 1, static = False) -> Cell:
         if not cell:
-            return False
+            return None
         if static:
             top = "up"
         else:
@@ -146,11 +264,11 @@ class Grid:
             if x + n < self.length:
                 return self.matrix[y][x + n]
         else:
-            return False
+            return None
 
     def down(self, cell, n: int = 1, static = False) -> Cell:
         if not cell:
-            return False
+            return None
         if static:
             top = "up"
         else:
@@ -170,11 +288,11 @@ class Grid:
             if x - n >= 0:
                 return self.matrix[y][x - n]
         else:
-            return False
+            return None
 
     def left(self, cell, n: int = 1, static = False) -> Cell:
         if not cell:
-            return False
+            return None
         if static:
             top = "up"
         else:
@@ -194,11 +312,11 @@ class Grid:
             if y - n >= 0:
                 return self.matrix[y - n][x]
         else:
-            return False
+            return None
 
     def right(self, cell, n: int = 1, static = False) -> Cell:
         if not cell:
-            return False
+            return None
         if static:
             top = "up"
         else:
@@ -218,7 +336,7 @@ class Grid:
             if y + n < self.height:
                 return self.matrix[y + n][x]
         else:
-            return False
+            return None
 
     def update(self):
         global FRAMENUM
@@ -266,6 +384,8 @@ class Grid:
                     self.handle_fuse(cell)
                 elif cell.state == URANIUM:
                     self.handle_uranium(cell)
+                elif cell.state == GLASS:
+                    self.handle_glass(cell)
                 elif cell.state == CRYSTAL:
                     self.handle_crystal(cell)
                 elif cell.state == GRAPHITE:
@@ -276,10 +396,12 @@ class Grid:
                     self.handle_oil(cell)
                 elif cell.state == FUMES:
                     self.handle_fumes(cell)
-                elif cell.state == CLONER:
+                elif cell.state == MORPH:
                     self.handle_cloner(cell)
                 elif cell.state == PUMP:
                     self.handle_pump(cell)
+                elif cell.state == VOID:
+                    self.handle_void(cell)
 
 # MARK: Elements
 
@@ -353,7 +475,11 @@ class Grid:
             elif nearby.state == WATER:
                 cell.state = AIR
                 nearby.state = STEAM
+                handle_achievement("Chemistry!")
                 return
+            elif nearby.state == STEEL:
+                if random.random() < 0.01:
+                    nearby.state = AIR
             elif nearby.state == DRYWOOD:
                 cell.state = AIR
                 nearby.state = FIRE
@@ -374,7 +500,10 @@ class Grid:
                     return
             elif nearby.state == CRYSTAL:
                 nearby.crystal_glow += 2
-                    
+            elif nearby.state == OIL:
+                nearby.state = AIR
+                cell.state = AIR
+                return              
 
         # for normal gravity 
         if self.down(cell) and self.down(cell).state == AIR:
@@ -437,7 +566,7 @@ class Grid:
 
     def handle_fire(self, cell: Cell):
         n: tuple[Cell] = neighbours(cell, self, 5, True)
-        not_flammables = (AIR, WATER, STEEL, SAND, ACID, STEAM, FIRE, LAVA, OBSIDIAN, URANIUM, CRYSTAL, GLASS, GRAPHITE)
+        not_flammables = (AIR, WATER, STEEL, SAND, ACID, STEAM, FIRE, LAVA, OBSIDIAN, URANIUM, CRYSTAL, GLASS, GRAPHITE, MORPH, PUMP)
 
         if all(cell.state in not_flammables for cell in n): # fire is surrounded by non-flammable materials
             if random.random() < 0.2:
@@ -450,6 +579,7 @@ class Grid:
         for current in n: # else,
             if current.state == WATER:
                 cell.state = AIR
+                return
             if cell.update:
                 if current.state in (GUNPOWDER, FUSE):
                     current.state = FIRE
@@ -462,6 +592,7 @@ class Grid:
                         if nearby.state == AIR and random.random() < 0.75:
                             nearby.state = FIRE
                             nearby.update = False
+                            handle_achievement("Spontaneous Combustion!")
                     if current.state == DRYWOOD and random.random() < 0.01:
                         current.state = AIR
                     if current.state == OIL and random.random() < 0.1:
@@ -470,6 +601,7 @@ class Grid:
                     current.state = DRYWOOD
                     cell.state = STEAM
                     current.update = False
+                    return
                 if current.state == FUMES:
                     current.state = FIRE
                     current.update = False
@@ -490,6 +622,7 @@ class Grid:
                 elif nearby.state == WATER:
                     nearby.state = AIR
                     cell.state = OBSIDIAN
+                    handle_achievement("Flint... and Steel...")
                     return
                 elif nearby.state == STEEL and random.random() < 0.15:
                     nearby.state = AIR
@@ -511,8 +644,6 @@ class Grid:
                         return
                 elif nearby.state == ICE:
                     nearby.state = WATER
-                    cell.state = LAVA
-                    return
                 elif nearby.state == GRAPHITE and random.random() < 0.001:
                     nearby.state = GUNPOWDER
                 elif nearby.state in (OIL, FUMES):
@@ -521,13 +652,16 @@ class Grid:
             below = self.down(cell)
             if below and below.state == FIRE:
                 self.swap(cell, below)
+                return
             self.handle_water(cell)
 
     def handle_obsidian(self, cell: Cell):
         global PROFILE
         w = 0
-        for i in range(1, min(16, cell.row + 1)):
-            above_cell = self.up(cell, i)
+        cells = []
+        for i in range(1, 16):
+            cells.append(self.up(cell, i))
+        for above_cell in cells:
             if not above_cell:
                 break
             above = above_cell.state
@@ -544,7 +678,7 @@ class Grid:
 
         for nearby in n:
             if nearby.state == WATER:
-                cell.state = DRYWOOD
+                cell.state = WETWOOD
                 nearby.state = AIR
                 return
             elif nearby.state == LAVA:
@@ -557,8 +691,9 @@ class Grid:
 
         for nearby in n:
             if nearby.state == WATER:
-                cell.state = DRYWOOD
+                cell.state = WETWOOD
                 nearby.state = AIR
+                return
             elif nearby.state == LAVA:
                 cell.state = FIRE
 
@@ -581,7 +716,7 @@ class Grid:
         self.handle_sand(cell)
 
     def handle_raycast(self, from_cell: Cell, to_cell: Cell, extended, recursed=False, to_coords: tuple = None, depth:int = 0, emitter: Cell = None):
-        global DEBUGVAR, PROFILE
+        global PROFILE
         if depth >= 100:
             return
         if emitter is None:
@@ -661,12 +796,13 @@ class Grid:
                 elif hit_cell.state == FUMES:
                     hit_cell.state = FIRE
                     emitter.uraniumdecaystage += 1
-                elif hit_cell.state == CLONER:
+                elif hit_cell.state == MORPH:
                     hit_cell.state = random.choice(list(PROFILE.keys()))
                     emitter.uraniumdecaystage += 1
                 elif hit_cell.state == PUMP:
-                    self.up(hit_cell).state = random.choice(list(PROFILE.keys()))
-                    emitter.uraniumdecaystage += 1
+                    if self.up(hit_cell):
+                        self.up(hit_cell).state = random.choice(list(PROFILE.keys()))
+                        emitter.uraniumdecaystage += 1
 
     def handle_crystal(self, cell: Cell):
         if cell.crystal_glow > 5000:
@@ -686,7 +822,7 @@ class Grid:
                     nearby.crystal_glow = 250
 
     def handle_glass(self, cell: Cell):
-        ...
+        handle_achievement("Transparent")
 
     def handle_graphite(self, cell: Cell):
         above: Cell = self.up(cell)
@@ -714,27 +850,18 @@ class Grid:
                         first.update = False
 
     def handle_ice(self, cell: Cell):
-        try:
-            u, d, l, r = neighbours(cell, self, 3, True)
-        except ValueError:
-            return
-        if random.random() < 0.01:
-            if l and l.state == WATER:
-                l.state = ICE
-            if r and r.state == WATER:
-                r.state = ICE
-        if random.random() < 0.001:
-            if u and u.state == WATER:
-                u.state = ICE
-            if d and d.state == WATER:
-                d.state = ICE
-
-        for nearby in (u,d,l,r):
-            if nearby.state == URANIUM:
-                if random.random() < 0.5:
-                    nearby.uraniumdecaystage = max(0, nearby.uraniumdecaystage - 1)
-            elif nearby.state == STEAM:
+        global FRAMENUM
+        n: list[Cell] = list(neighbours(cell, self, 3, True))
+        random.shuffle(n)
+        for nearby in n:
+            if nearby.state == WATER and random.random() < 0.01:
+                nearby.state = ICE
+            if nearby.state == STEAM:
                 nearby.state = WATER
+            if nearby.state == URANIUM:
+                nearby.uraniumdecaystage = max(0, nearby.uraniumdecaystage - 1)
+                if nearby.uraniumdecaystage < 20 and random.random() < 1/(20-nearby.uraniumdecaystage):
+                    cell.state = WATER
 
     def handle_oil(self, cell: Cell):
         if random.randint(0,1):
@@ -757,13 +884,6 @@ class Grid:
 
     def handle_fumes(self, cell: Cell):
         up_cell = self.up(cell)
-        if random.randint(0,1):
-            first = self.left(cell)
-            second = self.right(cell)
-        else:
-            first = self.right(cell)
-            second = self.left(cell)
-
         swappable = (AIR, SAND, WATER, ACID, FIRE, GUNPOWDER, URANIUM, OIL)
         self.gas_behavior(cell, up_cell, swappable)
 
@@ -771,20 +891,37 @@ class Grid:
         n: tuple[Cell] = neighbours(cell, self, 3, True)
         for current in n:
             if current.update:
-                if current.state not in (AIR, CLONER):
+                if current.state not in (AIR, MORPH):
                     cell.update = False
                     cell.state = current.state
+                    handle_achievement("Copy Cat!")
 
     def handle_pump(self, cell: Cell):
         up_cell = self.up(cell)
         down_cell = self.down(cell)
 
-        if up_cell and down_cell and up_cell.state not in (AIR) and down_cell.state in (AIR):
-            down_cell.state = up_cell.state
+        if up_cell and down_cell and up_cell.state != AIR and down_cell.state in (AIR,):
+            if up_cell.state != PUMP:
+                down_cell.state = up_cell.state
         
+    def handle_void(self, cell: Cell):
+        n: tuple[Cell] = neighbours(cell, self, 3, True)
+        for current in n:
+            if current.update:
+                if current.state not in (AIR, VOID):
+                    cell.update = False
+                    current.state = AIR
+                    handle_achievement("His Gluttony Sickens Me.")
+
 # MARK: End Elements
 
     def handle_pointer(self, key):
+        global HUE_CHANGE
+        if key == "`":
+            HUE_CHANGE = 1 - HUE_CHANGE
+        if key == "/":
+            self.show_radiation_lines = not self.show_radiation_lines
+
         if key == "w":
             self.pointer_y = (self.pointer_y - 1) % self.height
         if key == "s":
@@ -814,8 +951,14 @@ class Grid:
 
     def handle_action(self, key):
         brush_size = self.brush_size - 1
+
+        if key in ("backspace", "del"):
+            self.matrix[self.pointer_y][self.pointer_x].state = AIR
+            return
+
         if key != " " or brush_size < 0:
             return
+        self.record_undo()
 
         # continue work on this
         # complete refactor of the loops, new vars for avg, etc
@@ -910,10 +1053,14 @@ class Grid:
                                 
         # shape: Fill Tool
         elif self.brush_shape == 10:
+           handle_achievement("Fill!")
            current = self.matrix[self.pointer_y][self.pointer_x]
            target = self.brush_type
            empty = current.state
            self.flood_fill(target, empty, current)
+
+        if self.brush_type == LAVA:
+            handle_achievement("Hell Juice")
 
     def flood_fill(self, target: int, empty: int, origin: Cell):
         if target == empty:
@@ -961,6 +1108,14 @@ class Grid:
         if key == "_":
             self.brush_size = self.min_brush_size
 
+        if self.brush_size == 0:
+            self.show_pointer = 0
+        else:
+            self.show_pointer = 1
+
+        if self.brush_size == self.max_brush_size:
+            handle_achievement("Fill?")
+
     def handle_orientation(self, key):
         if key == "UP":
             self.orientation = "down"
@@ -973,6 +1128,7 @@ class Grid:
 
     def handle_clear(self, key):
         if key == "C":
+            self.record_undo()
             self.matrix = [[Cell(row=row, col=col) for col in range(self.length)]
                        for row in range(self.height)]
 
@@ -980,12 +1136,15 @@ class Grid:
         global PAUSED
         if key == "\\":
             PAUSED = not PAUSED
+            if PAUSED:
+                handle_achievement("Za Wurado!")
 
         if PAUSED:
             if key == "]":
                 self.record_undo()
                 self.update()
             elif key == "[" and UNDO_LIST:
+                handle_achievement("Shift + Z")
                 self.restore_undo()
 
     def handle_bulbpos(self, key):
@@ -1018,6 +1177,7 @@ class Grid:
     def handle_shuffle(self, key):
         if key != 'tab':
             return
+        handle_achievement("Natural landscaping!")
         for x in range(0, self.length):
             for y in range(0, self.height):
                 this = self.matrix[y][x]
@@ -1125,8 +1285,7 @@ class Grid:
                     self.illuminate(cell)
 
     def display(self, cell: Cell):
-        global HUE, PROFILE, FRAMENUM, DEBUGVAR
-        DEBUGVAR = str(self.matrix[self.pointer_y][self.pointer_x].crystal_glow)
+        global HUE, PROFILE, FRAMENUM
 
         symbol: str = None
         hsv: tuple[int] = None
@@ -1141,10 +1300,14 @@ class Grid:
                 symbol = "❖" 
             elif symbol == "■":
                 symbol = "◈"
-            elif symbol == "◙":
+            elif symbol in ("◙", "▣"):
                 symbol = "◆"
-            elif symbol in ("▢","◍"):
+            elif symbol in ("▢","◌"):
                 symbol = "◇"
+            elif symbol == "⧆":
+                symbol = "⧆"
+            elif symbol == "▦":
+                symbol = " "
             else:
                 symbol = "?"
 
@@ -1184,7 +1347,7 @@ class Grid:
 
         return (symbol, hsv)
 
-    def show(self, extra=0, padding="     ", popup: str = "", alpha : int = 0):
+    def show(self, extra=[], padding="     ", popup: Popup = None):
         global HUE, FRAMENUM
         self.dynamic_lights()
         span = max_len(extra)+6
@@ -1199,17 +1362,17 @@ class Grid:
                 grid += " "
 
             if rownum == 0:
-                grid += f"║{padding}" + "╭" + "─" * span + "╮          " + "\n"
+                grid += f"║{padding}" + "╭" + "─" * span + "╮\033[K" + "\n"
             elif rownum == len(extra) + 1:
-                grid += f"║{padding}" + "╰" + "─" * span + "╯          " + "\n"
+                grid += f"║{padding}" + "╰" + "─" * span + "╯\033[K" + "\n"
             elif extra and rownum != 0 and rownum < len(extra) + 1:
-                grid += f"║{padding}│   " + extra[rownum-1] + " " * (span-len(extra[rownum-1])-3) + "│          " + "\n"
-            elif popup != "" and rownum == self.height - 3:
-                grid += f"║{padding}" + color("╭" + "─" * (len(popup)+6) + "╮          ", hsv= (0,0,alpha)) + "\n"
-            elif popup != "" and rownum == self.height - 2:
-                grid += f"║{padding}" + color("│   " + popup + "   │", hsv=(0,0,alpha)) + "          " + "\n"
-            elif popup != "" and rownum == self.height - 1:
-                grid += f"║{padding}" + color("╰" + "─" * (len(popup)+6) + "╯          ", hsv= (0,0,alpha)) + "\n"
+                grid += f"║{padding}│   " + extra[rownum-1] + " " * (span-len(extra[rownum-1])-3) + "│\033[K" + "\n"
+            elif rownum == self.height - 3:
+                grid += f"║{padding}" + color("╭" + "─" * (len(popup.text)+6) + "╮\033[K", hsv= (50,100,popup.alpha)) + "\n"
+            elif rownum == self.height - 2:
+                grid += f"║{padding}" + color("│   " + popup.text + "   │", hsv=(50, 100,popup.alpha)) + "\033[K" + "\n"
+            elif rownum == self.height - 1:
+                grid += f"║{padding}" + color("╰" + "─" * (len(popup.text)+6) + "╯\033[K", hsv= (50, 100,popup.alpha)) + "\n"
             else:
                 grid += "║" + " "*2*span + "\n"
         
@@ -1282,8 +1445,8 @@ def neighbours(cell: Cell, grid: Grid, method, filter=False, size = None):
 
 def get_dist(cell1: Cell, cell2: Cell, direct=False, signed=False) -> tuple[int]:
     if signed:
-        xdist = abs(cell1.col - cell2.col)
-        ydist = abs(cell1.row - cell2.row)
+        xdist = cell1.col - cell2.col
+        ydist = cell1.row - cell2.row
     else:
         xdist = abs(cell1.col - cell2.col)
         ydist = abs(cell1.row - cell2.row)
@@ -1305,15 +1468,18 @@ def average(*args):
     return s / len(args)
 
 def handle_RBS(key):
-    global RAINBOW_SAND, RBS_COUNTER, ACH_POPUP
+    global RAINBOW_SAND, RBS_COUNTER
     code = "itchio"
 
     if key is None:
         return
+    key = key.lower()
     
     if key in code:
-        if code[RBS_COUNTER] == key:
+        if RBS_COUNTER < len(code) and code[RBS_COUNTER] == key:
             RBS_COUNTER += 1
+        elif key == code[0]:
+            RBS_COUNTER = 1
         else:
             RBS_COUNTER = 0
     else:
@@ -1322,6 +1488,7 @@ def handle_RBS(key):
     if RBS_COUNTER == len(code):
         RAINBOW_SAND = not RAINBOW_SAND
         RBS_COUNTER = 0
+        handle_achievement("Eye Candy")
 
 def handle_framerate(key): 
     global FRAMERATE, PAUSED
@@ -1331,6 +1498,20 @@ def handle_framerate(key):
             FRAMERATE = min(500, FRAMERATE + 1)
         elif key == "[":
             FRAMERATE = max(1, FRAMERATE - 1)
+    if FRAMERATE == 1:
+        handle_achievement("Precarious Analyst")
+    elif FRAMERATE == 500:
+        handle_achievement("TRUE HUSSER")
+
+def handle_achievement(ach):
+    global MSG, ACHIEVEMENTS, ACH_SFX
+    if not ACHIEVEMENTS.get(ach, True):
+        ACHIEVEMENTS[ach] = True
+        MSG.text = ach
+        MSG.display()
+        ACH_SFX.play()
+        with open("data.json", "w", encoding="utf-8") as file:
+            json.dump(ACHIEVEMENTS, file, indent=4)
 
 def color(str: str, hsv: tuple = None, rgb: tuple = None):
     '''Provide a string, and a RGB or HSV tuple to add that color to the string. 
@@ -1347,7 +1528,9 @@ def color(str: str, hsv: tuple = None, rgb: tuple = None):
 def get_keypress():
   '''Silently checks for input.
     Tab: tab
-    Enter: enter'''
+    Enter: enter
+    Backspace: backspace
+    Delete: del'''
   if sys.platform == 'win32':
     import ctypes
     import msvcrt
@@ -1368,6 +1551,10 @@ def get_keypress():
         shift_held = bool(ctypes.windll.user32.GetAsyncKeyState(0x10) & 0x8000)
         prefix = 'SHIFT' if shift_held else ''
         return f'{prefix}{arrow_map[key_char]}'
+
+      # Handle delete key
+      if ch2 == b'S':
+        return 'del'
 
       # Map Alt + letter scan codes on Windows (e.g., Alt + x is scan code 45)
       alt_scan_codes = {
@@ -1412,6 +1599,10 @@ def get_keypress():
     if ch == b'\t':
       return 'tab'
 
+    # Handle Backspace key
+    if ch == b'\x08':
+      return 'backspace'
+    
     # Handle Ctrl + key (ASCII values 1 to 26 represent Ctrl+A through Ctrl+Z)
     val = ord(ch)
     if 1 <= val <= 26:
@@ -1447,39 +1638,34 @@ def terminal_background():
 # MARK: mains
 
 def menu_loop():
+    global ACHIEVEMENTS
+    TS = TitleScreen()
+
     while True:
-        pressed_key = get_keypress()
-        if pressed_key in ("enter", " "):
-            wipe_terminal_screen()
-            return
-        sys.stdout.write("\rWELCOME")
-        ...
+        TS.tick()
+        TS.refresh()
 
 def game_loop(HUE_CHANGE, gravity_set, pause_set, shapes_set, grid: Grid, timer):
-    global HUE, FRAMENUM, PERFORMANCE_MODE, UNDO_LIST, PROFILE, PAUSED, BULB_POS, ACH_POPUP, ALPHA
-    ACH_POPUP = ""
-    ALPHA = 100
+    global HUE, FRAMENUM, PERFORMANCE_MODE, UNDO_LIST, PROFILE, PAUSED, BULB_POS, MSG
+    MSG = Popup("")
     while True:
         pressed_key = get_keypress()
 
         if pressed_key == "esc":
             wipe_terminal_screen()
-            return
+            break
 
-        if ACH_POPUP != "":
-            ALPHA -= 0.1
-        if ALPHA < 0:
-            ACH_POPUP = ""
-            ALPHA = 100
+        Popup.updateall(0.25)
 
         ticked = False
 
-        if not PAUSED and timer.diff() > (1/FRAMERATE):
-            grid.record_undo()
-            grid.update()
-            timer.reset()
-            HUE += HUE_CHANGE
-            FRAMENUM += 1
+        if timer.diff() > (1/FRAMERATE):
+            if not PAUSED:
+                grid.record_undo()
+                grid.update()
+                timer.reset()
+                HUE += HUE_CHANGE
+                FRAMENUM += 1
             ticked = True
 
         grid.handle_pointer(pressed_key)
@@ -1494,18 +1680,8 @@ def game_loop(HUE_CHANGE, gravity_set, pause_set, shapes_set, grid: Grid, timer)
         handle_RBS(pressed_key)
         handle_framerate(pressed_key)
 
-        if grid.brush_size == 0:
-            grid.show_pointer = 0
-        else:
-            grid.show_pointer = 1
-
-        if pressed_key == "`":
-            HUE_CHANGE = 1 - HUE_CHANGE
-        if pressed_key == "/":
-            grid.show_radiation_lines = not grid.show_radiation_lines
-
         if PERFORMANCE_MODE:
-            UNDO_LIST.maxlen = 100
+            UNDO_LIST.maxlen = 100  # IMPORTANT LEFT TO DO DEBUG FIX THIS : ADD UNDO_LIST = deque(UNDO_LIST, maxlen=100) ONCE PERFMODE IS TOGGLED!
 
         if ticked or pressed_key is not None:
             grid.show(extra=[   
@@ -1515,16 +1691,18 @@ def game_loop(HUE_CHANGE, gravity_set, pause_set, shapes_set, grid: Grid, timer)
         f"Gravity: {gravity_set[grid.orientation]} ",
         f"Simulation: {pause_set[PAUSED]}",
         f"Bulb: {BULB_POS}",
-    ], popup=ACH_POPUP, alpha=ALPHA)
+    ], popup=MSG)
         else:
             sleep(0.002)
+    with open("data.json", "w", encoding="utf-8") as file:
+        json.dump(ACHIEVEMENTS, file, indent=4)
 
 def main():
     global FRAMENUM, FRAMERATE, DYNAMIC_LIGHTING, BULB_POS, \
-        PAUSED, UNDO_LIST, MAX_UNDO, \
+        PAUSED, UNDO_LIST, MAX_UNDO, MUSIC_VOL, \
         MIN_BRUSH_SIZE, MAX_BRUSH_SIZE, DEFAULT_BRUSH_SIZE, \
         RAINBOW_SAND, HUE, RBS_COUNTER, PROFILE, TYPE_DICT, PERFORMANCE_MODE, \
-        DEBUGVAR
+        ACHIEVEMENTS, ACH_SFX, MUSIC_VOL
 
     L, B = 30, 30 # length and height of the grid [default: 30x30]
 
@@ -1550,7 +1728,10 @@ def main():
     UNDO_LIST = deque(maxlen=MAX_UNDO) 
     PERFORMANCE_MODE = False
 
-    DEBUGVAR = ""
+    MUSIC_VOL = 0.2
+
+    with open("data.json", "r", encoding="utf-8") as file:
+        ACHIEVEMENTS = json.load(file)
 
     PROFILE = {
         AIR : {"name": "Air",
@@ -1653,15 +1834,20 @@ def main():
                "color": (60, 100, 50),
                "transparency": 4,
                "weight": 0},
-        CLONER : {"name": "Cloner",
+        MORPH : {"name": "Morph",
                "symbol": "⧆",
                "color": (300, 100, 100),
                "transparency": 0,
                "weight": 0},
         PUMP : {"name": "Pump",
-               "symbol": "🞒",
+               "symbol": "▣",
                "color": (350, 80, 70),
                "transparency": 6,
+               "weight": 0},
+        VOID : {"name": "Void",
+               "symbol": "▦",
+               "color": (270, 60, 30),
+               "transparency": 0,
                "weight": 0}
     }
 
@@ -1677,7 +1863,8 @@ def main():
                 "▢": "glass",
                 PROFILE[STEAM]["symbol"]: "gas",
                 "⧆": "cloner",
-                "🞒": "pump"
+                "▣": "pump",
+                "▦": "void"
             }
 
     wipe_terminal_screen()
@@ -1687,6 +1874,13 @@ def main():
     grid : Grid = Grid(L,B)
 
     timer = Timer()
+
+    mixer.init()
+    mixer.music.load("sounds/SPIRAL_soundstabs.mp3")
+    ACH_SFX = mixer.Sound("sounds/achievement.wav")
+    ACH_SFX.set_volume(MUSIC_VOL + 0.3)
+    mixer.music.set_volume(MUSIC_VOL)
+    mixer.music.play(-1)
 
     # main loops
     while True:
@@ -1698,9 +1892,8 @@ if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        hide_terminal_cursor()
+        show_terminal_cursor()
     finally:
-        hide_terminal_cursor()
+        show_terminal_cursor()
+    mixer.quit()
 # master
-
-# cloner/pump : ⧆ or 🞒

@@ -5,6 +5,7 @@
 - `WASD` to **move** around.
 - `Shift + WASD` to **jump** cursor around.
 - `SPACE` to **paint**.
+- `del` or `backspace` delete the element under cursor.
 
 ## Brush Control
 
