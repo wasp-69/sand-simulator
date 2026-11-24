@@ -44,59 +44,61 @@ class Popup:
 class TitleScreen:
 
     def __init__(self):
+        global SFX_VOL
+        # FONT -> Title: Lingahoulic Rounded | Options: Future (modified)
         self.TITLE = """
- ████ █   █ ███ █████ █████ ███ █   █  ███            ████  ███  █   █ ████  
-█     █   █  █  █       █    █  ██  █ █              █     █   █ ██  █ █   █ 
- ███  █████  █  ████    █    █  █ █ █ █  ██           ███  █████ █ █ █ █   █ 
-    █ █   █  █  █       █    █  █  ██ █   █              █ █   █ █  ██ █   █ 
-████  █   █ ███ █       █   ███ █   █  ███           ████  █   █ █   █ ████  
-
-
-
+╭───────╮ ╭─╮       ╭─╮   ╭─────╮   ╭─╮     ╭─╮                             ╭───────╮                             ╭─╮ 
+│ ╭─────╯ │ ╰─────╮ ╰─╯   │ ╭───╯ ╭─╯ ╰─╮   ╰─╯ ╭───────╮ ╭───────╮         │ ╭─────╯ ╭───────╮   ╭───────╮ ╭─────╯ │ 
+│ ╰─────╮ │ ╭───╮ │ ╭─╮ ╭─╯ ╰─╮   ╰─╮ ╭─╯   ╭─╮ │ ╭───╮ │ │ ╭───╮ │         │ ╰─────╮ │ ╭───╮ │   │ ╭───╮ │ │ ╭───╮ │ 
+╰─────╮ │ │ │   │ │ │ │ ╰─╮ ╭─╯     │ │     │ │ │ │   │ │ │ │   │ │         ╰─────╮ │ │ │   │ │   │ │   │ │ │ │   │ │ 
+╭─────╯ │ │ │   │ │ │ │   │ │       │ ╰───╮ │ │ │ │   │ │ │ ╰───╯ │         ╭─────╯ │ │ ╰───╯ ╰─╮ │ │   │ │ │ ╰───╯ │ 
+╰───────╯ ╰─╯   ╰─╯ ╰─╯   ╰─╯       ╰─────╯ ╰─╯ ╰─╯   ╰─╯ ╰─────╮ │         ╰───────╯ ╰─────────╯ ╰─╯   ╰─╯ ╰───────╯ 
+                                                            ╭───╯ │                                                   
+                                                            ╰─────╯    
 """
         self.options = ["PLAY", "SETTINGS", "ABOUT", "EXIT"]
         self.empty_ascii_dict = {
-        "PLAY": """
-┌┐      ┌┐ │  ┌┐ │ │\033[K
-││      ├┘ │  ├┤ └┬┘\033[K
-┴┘      ┴  ┴─ ┴┴  ┴ \033[K
+        "PLAY": """\033[K
+┏━┓   ┏━┓ ╻   ┏━┓ ╻ ╻\033[K
+┃ ┃   ┣━┛ ┃   ┣━┫ ┗┳┛\033[K
+┗━┛   ╹   ┗━╸ ╹ ╹  ╹ \033[K
 """,
         "SETTINGS": """
-┌┐      ┌┐ ┌─ ┌┬┐ ┌┬┐ ┬ ┌┐│ ┌─ ┌┐\033[K
-││      └┐ ├─  │   │  │ │││ │┬ └┐\033[K
-┴┘      ┴┘ ┴─  ┴   ┴  ┴ ┴└┘ ┴┘ ┴┘\033[K
+┏━┓   ┏━┓ ┏━╸ ╺┳╸ ╺┳╸ ╻ ┏┓╻ ┏━╸ ┏━┓\033[K
+┃ ┃   ┗━┓ ┣╸   ┃   ┃  ┃ ┃┃┃ ┃╺┓ ┗━┓\033[K
+┗━┛   ┗━┛ ┗━╸  ╹   ╹  ╹ ╹┗┛ ┗━┛ ┗━┛\033[K
 """,
         "ABOUT": """
-┌┐      ┌┐ ┌┐  ┌┐ ││ ┌┬┐\033[K
-││      ├┤ ├┴┐ ││ ││  │ \033[K
-┴┘      ┴┴ ┴─┘ ┴┘ ┴┘  ┴ \033[K
+┏━┓   ┏━┓ ┏━┓ ┏━┓ ╻ ╻ ╺┳╸\033[K
+┃ ┃   ┣━┫ ┣━┫ ┃ ┃ ┃ ┃  ┃ \033[K
+┗━┛   ╹ ╹ ┗━┛ ┗━┛ ┗━┛  ╹ \033[K
 """, 
         "EXIT": """
-┌┐      ┌─ │┌┘ ┬ ┌┬┐\033[K
-││      ├─ └┼┐ │  │ \033[K
-┴┘      ┴─ ┌┘│ ┴  ┴ \033[K
+┏━┓   ┏━╸ ╻ ╻ ╻ ╺┳╸\033[K
+┃ ┃   ┣╸  ┏╋┛ ┃  ┃ \033[K
+┗━┛   ┗━╸ ╹ ╹ ╹  ╹ \033[K
 """
     }
         self.check_ascii_dict = {
         "PLAY": """
-┌─┐     ┌┐ │  ┌┐ │ │\033[K
-│■│     ├┘ │  ├┤ └┬┘\033[K
-┴─┘     ┴  ┴─ ┴┴  ┴ \033[K
+┏━┓    ┏━┓ ╻   ┏━┓ ╻ ╻\033[K
+┃┃┃    ┣━┛ ┃   ┣━┫ ┗┳┛\033[K
+┗━┛    ╹   ┗━╸ ╹ ╹  ╹ \033[K
 """,
         "SETTINGS": """
-┌─┐     ┌┐ ┌─ ┌┬┐ ┌┬┐ ┬ ┌┐│ ┌─ ┌┐\033[K
-│■│     └┐ ├─  │   │  │ │││ │┬ └┐\033[K
-┴─┘     ┴┘ ┴─  ┴   ┴  ┴ ┴└┘ ┴┘ ┴┘\033[K
+┏━┓    ┏━┓ ┏━╸ ╺┳╸ ╺┳╸ ╻ ┏┓╻ ┏━╸ ┏━┓\033[K
+┃┃┃    ┗━┓ ┣╸   ┃   ┃  ┃ ┃┃┃ ┃╺┓ ┗━┓\033[K
+┗━┛    ┗━┛ ┗━╸  ╹   ╹  ╹ ╹┗┛ ┗━┛ ┗━┛\033[K
 """,
         "ABOUT": """
-┌─┐     ┌┐ ┌┐  ┌┐ ││ ┌┬┐\033[K
-│■│     ├┤ ├┴┐ ││ ││  │ \033[K
-┴─┘     ┴┴ ┴─┘ ┴┘ ┴┘  ┴ \033[K
+┏━┓    ┏━┓ ┏━┓ ┏━┓ ╻ ╻ ╺┳╸\033[K
+┃┃┃    ┣━┫ ┣━┫ ┃ ┃ ┃ ┃  ┃ \033[K
+┗━┛    ╹ ╹ ┗━┛ ┗━┛ ┗━┛  ╹ \033[K
 """, 
         "EXIT": """
-┌─┐     ┌─ │┌┘ ┬ ┌┬┐\033[K
-│■│     ├─ └┼┐ │  │ \033[K
-┴─┘     ┴─ ┌┘│ ┴  ┴ \033[K
+┏━┓    ┏━╸ ╻ ╻ ╻ ╺┳╸\033[K
+┃┃┃    ┣╸  ┏╋┛ ┃  ┃ \033[K
+┗━┛    ┗━╸ ╹ ╹ ╹  ╹ \033[K
 """
     }
 
@@ -104,19 +106,33 @@ class TitleScreen:
         self.ht = 0
         self.pointer = 0
         self.key = None
+        self.screentype = "main"
+        self.running = True
+        self.lower = ""
+
+        self.playsound = mixer.Sound("sounds/sfx/about.wav")
+        self.playsound.set_volume(SFX_VOL)
+        self.exitsound = mixer.Sound("sounds/sfx/exit.wav")
+        self.exitsound.set_volume(SFX_VOL)
+        self.aboutsound = mixer.Sound("sounds/sfx/menutogame.wav")
+        self.aboutsound.set_volume(SFX_VOL)
+        self.settingssound = mixer.Sound("sounds/sfx/settings.wav")
+        self.settingssound.set_volume(SFX_VOL)
 
     def tick(self):
-        self.rgb += 0.001
+        self.rgb = (self.rgb + 0.001) % 5
         if random.random() < 0.1: self.ht += 0.01
 
         self.key = get_keypress()
         self.handle_pointer()
+        self.handle_action()
 
     def refresh(self):
         reset_terminal_cursor_pos()
 
         sys.stdout.write(self.handle_gradient())
-        sys.stdout.write(self.handle_options())
+        self.handle_options()
+        sys.stdout.write(self.lower)
 
         sys.stdout.flush()
 
@@ -128,7 +144,73 @@ class TitleScreen:
         elif self.key in (" ", "enter"):
             ...
 
+    def handle_action(self):
+        if self.screentype == "main":
+            if self.key in ("enter", " ", "RIGHT"):    
+                selected = self.options[self.pointer]
+                if selected == "PLAY":
+                    self.handle_play()
+                elif selected == "SETTINGS":
+                    self.handle_settings()
+                elif selected == "ABOUT":
+                    self.handle_about()
+                elif selected == "EXIT":
+                    self.handle_exit()
+
+        elif self.key in ("esc", "del", "backspace", "LEFT"):
+            wipe_terminal_screen()
+            self.screentype = "main"
+
+    def handle_play(self):
+        self.playsound.play()
+        self.running = False
+
+    def handle_settings(self):
+        self.settingssound.play()
+
+    def handle_about(self):
+        self.aboutsound.play()
+        self.screentype = "about"
+        self.lower ="""
+╭─╮╭─╮╭─╮╷ ╷╶┬╴
+├─┤├─┤│ ││ │ │ 
+╵ ╵╰─╯╰─╯╰─╯ ╵ 
+
+A sandbox simulation game with 23 interactive elements, 4-way rotatable gravity, dynamic lighting, 11 brush shapes + achievements & hidden secrets.
+Runs entirely in the terminal. Check out Controls.md for detailed documentation of the controls in the simulation.
+Check out Elements.md for detailed documentation on the various elements in the game. Best played in Windows Terminal (TrueColor & Unicode).
+This game was made for the 2026 itch.io game off. Made entirely by Artemis689 in one month. License may be changed to be open source in 2027.
+
+╷ ╷╭─╮╭─╴   ╭─╮╭─╴   ╭─╮  ╷ 
+│ │╰─╮├╴    │ │├╴    ├─┤  │ 
+╰─╯╰─╯╰─╴   ╰─╯╵     ╵ ╵╵ ╵╵
+
+A.I. was used very sparingly in the development of this game. Only one or two functions were written by the help of A.I. and the Elements.md file was made
+using the help of A.I. for deep resourcing. Controls.md is completely hand made. A.I. was extensively used as the playtester for this game and to report bugs.
+
+╭─╮╭─╮╭─╮╭─╴╶┬╴╭─╮
+├─┤╰─╮╰─╮├╴  │ ╰─╮
+╵ ╵╰─╯╰─╯╰─╴ ╵ ╰─╯
+
+ASCII Fonts: Lingahoulic Rounded, Future Rounded, Future (modified)
+Music: [SPIRAL by Sound Stabs royalty free] [link] | SFX: mixkit.co
+
+\x1b[2m[Press ESC, Backspace, or ← to return]\x1b[22m
+""" 
+        wipe_terminal_screen()
+
+    def handle_exit(self):
+        self.exitsound.play()
+        show_terminal_cursor()
+        while mixer.get_busy():
+            sleep(0.1)
+        wipe_terminal_screen()
+        mixer.quit()
+        sys.exit(0)
+
     def handle_options(self) -> str:
+        if self.screentype != "main":
+            return ""
         screen = ""
 
         for i, opt in enumerate(self.options):
@@ -136,7 +218,7 @@ class TitleScreen:
             else: screen += self.empty_ascii_dict[opt]
             screen += "\033[K\n\033[K\n"
 
-        return screen
+        self.lower = screen
 
     def handle_gradient(self) -> str:
         gradient = []
@@ -950,15 +1032,21 @@ class Grid:
                 cur = self.matrix[self.pointer_y][self.pointer_x]
 
     def handle_action(self, key):
+        global ACT_SFX
         brush_size = self.brush_size - 1
 
         if key in ("backspace", "del"):
             self.matrix[self.pointer_y][self.pointer_x].state = AIR
             return
 
+        if key == "enter":
+            self.matrix[self.pointer_y][self.pointer_x].state = self.brush_type
+            return
+
         if key != " " or brush_size < 0:
             return
         self.record_undo()
+        ACT_SFX.play()
 
         # continue work on this
         # complete refactor of the loops, new vars for avg, etc
@@ -1513,7 +1601,7 @@ def handle_achievement(ach):
         with open("data.json", "w", encoding="utf-8") as file:
             json.dump(ACHIEVEMENTS, file, indent=4)
 
-def color(str: str, hsv: tuple = None, rgb: tuple = None):
+def color(text: str, hsv: tuple = None, rgb: tuple = None):
     '''Provide a string, and a RGB or HSV tuple to add that color to the string. 
     RGB: 0-255 values for R, G & B color channels.
     HSV: hue (0-360), saturation & value (0-100).'''
@@ -1523,7 +1611,7 @@ def color(str: str, hsv: tuple = None, rgb: tuple = None):
         h, s, v = hsv
         r, g, b = hsv_to_rgb((h % 360) / 360, max(0, min(1, s / 100)), max(0, min(1, v / 100)))
         r, g, b = round(r * 255), round(g * 255), round(b * 255)
-    return f"\033[38;2;{r};{g};{b}m{str}\033[0m"
+    return f"\033[38;2;{r};{g};{b}m{text}\033[0m"
 
 def get_keypress():
   '''Silently checks for input.
@@ -1641,9 +1729,10 @@ def menu_loop():
     global ACHIEVEMENTS
     TS = TitleScreen()
 
-    while True:
+    while TS.running:
         TS.tick()
         TS.refresh()
+    wipe_terminal_screen()
 
 def game_loop(HUE_CHANGE, gravity_set, pause_set, shapes_set, grid: Grid, timer):
     global HUE, FRAMENUM, PERFORMANCE_MODE, UNDO_LIST, PROFILE, PAUSED, BULB_POS, MSG
@@ -1653,6 +1742,7 @@ def game_loop(HUE_CHANGE, gravity_set, pause_set, shapes_set, grid: Grid, timer)
 
         if pressed_key == "esc":
             wipe_terminal_screen()
+            ESC_SFX.play()
             break
 
         Popup.updateall(0.25)
@@ -1696,13 +1786,14 @@ def game_loop(HUE_CHANGE, gravity_set, pause_set, shapes_set, grid: Grid, timer)
             sleep(0.002)
     with open("data.json", "w", encoding="utf-8") as file:
         json.dump(ACHIEVEMENTS, file, indent=4)
+    wipe_terminal_screen()
 
 def main():
     global FRAMENUM, FRAMERATE, DYNAMIC_LIGHTING, BULB_POS, \
         PAUSED, UNDO_LIST, MAX_UNDO, MUSIC_VOL, \
         MIN_BRUSH_SIZE, MAX_BRUSH_SIZE, DEFAULT_BRUSH_SIZE, \
         RAINBOW_SAND, HUE, RBS_COUNTER, PROFILE, TYPE_DICT, PERFORMANCE_MODE, \
-        ACHIEVEMENTS, ACH_SFX, MUSIC_VOL
+        ACHIEVEMENTS, ACH_SFX, ACT_SFX, ESC_SFX, MUSIC_VOL, SFX_VOL
 
     L, B = 30, 30 # length and height of the grid [default: 30x30]
 
@@ -1728,7 +1819,8 @@ def main():
     UNDO_LIST = deque(maxlen=MAX_UNDO) 
     PERFORMANCE_MODE = False
 
-    MUSIC_VOL = 0.2
+    MUSIC_VOL = 0.1 # 0.2
+    SFX_VOL = 0.5 # 0.5
 
     with open("data.json", "r", encoding="utf-8") as file:
         ACHIEVEMENTS = json.load(file)
@@ -1876,9 +1968,13 @@ def main():
     timer = Timer()
 
     mixer.init()
-    mixer.music.load("sounds/SPIRAL_soundstabs.mp3")
-    ACH_SFX = mixer.Sound("sounds/achievement.wav")
-    ACH_SFX.set_volume(MUSIC_VOL + 0.3)
+    mixer.music.load("sounds/music/SPIRAL_soundstabs.mp3")
+    ACH_SFX = mixer.Sound("sounds/sfx/achievement.wav")
+    ACH_SFX.set_volume(SFX_VOL)
+    ACT_SFX = mixer.Sound("sounds/sfx/enter.wav")
+    ACT_SFX.set_volume(SFX_VOL)
+    ESC_SFX = mixer.Sound("sounds/sfx/esc.wav")
+    ESC_SFX.set_volume(SFX_VOL)
     mixer.music.set_volume(MUSIC_VOL)
     mixer.music.play(-1)
 
