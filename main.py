@@ -6,6 +6,7 @@ import math
 from collections import deque
 import pygame.mixer as mixer
 import json
+import pyautogui
 
 AIR, SAND, WATER, STEEL, ACID, STEAM, DRYWOOD, WETWOOD, FIRE, LAVA, OBSIDIAN, GUNPOWDER, FUSE, URANIUM, CRYSTAL, GLASS, GRAPHITE, ICE, OIL, FUMES, MORPH, PUMP, VOID = \
       0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22
@@ -44,7 +45,7 @@ class Popup:
 class TitleScreen:
 
     def __init__(self):
-        global SFX_VOL
+        global SFX_VOL, MUSIC_VOL, PERFORMANCE_MODE, DYNAMIC_LIGHTING, UNDO_LIST
         # FONT -> Title: Lingahoulic Rounded | Options: Future (modified)
         self.TITLE = """
 ╭───────╮ ╭─╮       ╭─╮   ╭─────╮   ╭─╮     ╭─╮                             ╭───────╮                             ╭─╮ 
@@ -57,8 +58,9 @@ class TitleScreen:
                                                             ╰─────╯    
 """
         self.options = ["PLAY", "SETTINGS", "ABOUT", "EXIT"]
+        self.settings = ["PERFORMANCE MODE", "MUSIC VOL", "SFX VOL", "DEFAULT"]
         self.empty_ascii_dict = {
-        "PLAY": """\033[K
+        "PLAY": """
 ┏━┓   ┏━┓ ╻   ┏━┓ ╻ ╻\033[K
 ┃ ┃   ┣━┛ ┃   ┣━┫ ┗┳┛\033[K
 ┗━┛   ╹   ┗━╸ ╹ ╹  ╹ \033[K
@@ -101,6 +103,58 @@ class TitleScreen:
 ┗━┛    ┗━╸ ╹ ╹ ╹  ╹ \033[K
 """
     }
+        self.check_setting_dict = { 
+     "PERFORMANCE MODE":
+"""
+╭─╮      ╭─╮╭─╴╭─╮╭─╴╭─╮╭─╮╭┬╮╭─╮╭╮╷╭─╴╭─╴   ╭┬╮╭─╮╶┬╮╭─╴\033[K
+│││      ├─╯├╴ ├┬╯├╴ │ │├┬╯│││├─┤│╰┤│  ├╴    ││││ │ ││├╴ \033[K
+╰─╯      ╵  ╰─╴╵╰╴╵  ╰─╯╵╰╴╵ ╵╵ ╵╵ ╵╰─╴╰─╴   ╵ ╵╰─╯╶┴╯╰─╴\033[K
+""", "MUSIC VOL":
+"""
+╭─╮      ╭┬╮╷ ╷╭─╮╷╭─╴   ╷  ╷╭─╮╷  \033[K
+│││      ││││ │╰─╮││     ╰╮╭╯│ ││  \033[K
+╰─╯      ╵ ╵╰─╯╰─╯╵╰─╴    ╰╯ ╰─╯╰─╴\033[K
+""", "SFX VOL":
+"""
+╭─╮      ╭─╮╭─╴╷ ╷   ╷  ╷╭─╮╷  \033[K
+│││      ╰─╮├╴ ╭┼╯   ╰╮╭╯│ ││  \033[K
+╰─╯      ╰─╯╵  ╵ ╵    ╰╯ ╰─╯╰─╴\033[K
+""", "DEFAULT":
+"""
+╭─╮      ╶┬╮╭─╴╭─╴╭─╮╷ ╷╷  ╶┬╴\033[K
+│││       ││├╴ ├╴ ├─┤│ ││   │ \033[K
+╰─╯      ╶┴╯╰─╴╵  ╵ ╵╰─╯╰─╴ ╵ \033[K
+"""
+        }
+        self.empty_setting_dict = {
+     "PERFORMANCE MODE":
+"""
+╭─╮     ╭─╮╭─╴╭─╮╭─╴╭─╮╭─╮╭┬╮╭─╮╭╮╷╭─╴╭─╴   ╭┬╮╭─╮╶┬╮╭─╴\033[K
+│ │     ├─╯├╴ ├┬╯├╴ │ │├┬╯│││├─┤│╰┤│  ├╴    ││││ │ ││├╴ \033[K
+╰─╯     ╵  ╰─╴╵╰╴╵  ╰─╯╵╰╴╵ ╵╵ ╵╵ ╵╰─╴╰─╴   ╵ ╵╰─╯╶┴╯╰─╴\033[K
+""", "MUSIC VOL":
+"""
+╭─╮     ╭┬╮╷ ╷╭─╮╷╭─╴   ╷  ╷╭─╮╷  \033[K
+│ │     ││││ │╰─╮││     ╰╮╭╯│ ││  \033[K
+╰─╯     ╵ ╵╰─╯╰─╯╵╰─╴    ╰╯ ╰─╯╰─╴\033[K
+""", "SFX VOL":
+"""
+╭─╮     ╭─╮╭─╴╷ ╷   ╷  ╷╭─╮╷  \033[K
+│ │     ╰─╮├╴ ╭┼╯   ╰╮╭╯│ ││  \033[K
+╰─╯     ╰─╯╵  ╵ ╵    ╰╯ ╰─╯╰─╴\033[K
+""", "DEFAULT":
+"""
+╭─╮     ╶┬╮╭─╴╭─╴╭─╮╷ ╷╷  ╶┬╴\033[K
+│ │      ││├╴ ├╴ ├─┤│ ││   │ \033[K
+╰─╯     ╶┴╯╰─╴╵  ╵ ╵╰─╯╰─╴ ╵ \033[K
+"""
+        }
+        self.variable_dict = {
+            "PERFORMANCE MODE": PERFORMANCE_MODE,
+            "MUSIC VOL": MUSIC_VOL*100,
+            "SFX VOL": SFX_VOL*100,
+            "DEFAULT": "---"
+        }
 
         self.rgb = 0
         self.ht = 0
@@ -111,7 +165,7 @@ class TitleScreen:
         self.lower = ""
 
         self.playsound = mixer.Sound("sounds/sfx/about.wav")
-        self.playsound.set_volume(SFX_VOL)
+        self.playsound.set_volume(SFX_VOL - 0.3)
         self.exitsound = mixer.Sound("sounds/sfx/exit.wav")
         self.exitsound.set_volume(SFX_VOL)
         self.aboutsound = mixer.Sound("sounds/sfx/menutogame.wav")
@@ -120,12 +174,15 @@ class TitleScreen:
         self.settingssound.set_volume(SFX_VOL)
 
     def tick(self):
-        self.rgb = (self.rgb + 0.001) % 5
+        self.rgb += 0.001
         if random.random() < 0.1: self.ht += 0.01
 
         self.key = get_keypress()
         self.handle_pointer()
-        self.handle_action()
+        if self.screentype == "settings":
+            self.handle_settings_pointer()
+        else:
+            self.handle_action()
 
     def refresh(self):
         reset_terminal_cursor_pos()
@@ -137,12 +194,11 @@ class TitleScreen:
         sys.stdout.flush()
 
     def handle_pointer(self):
-        if self.key in ("DOWN", "S", "s"):
-            self.pointer = (self.pointer + 1) % len(self.options)
-        elif self.key in ("UP", "W", "w"):
-            self.pointer = (self.pointer - 1) % len(self.options)
-        elif self.key in (" ", "enter"):
-            ...
+        if self.screentype == "main":
+            if self.key in ("DOWN", "S", "s"):
+                self.pointer = (self.pointer + 1) % len(self.options)
+            elif self.key in ("UP", "W", "w"):
+                self.pointer = (self.pointer - 1) % len(self.options)
 
     def handle_action(self):
         if self.screentype == "main":
@@ -167,33 +223,44 @@ class TitleScreen:
 
     def handle_settings(self):
         self.settingssound.play()
+        self.pointer = 0
+        self.screentype = "settings"
 
     def handle_about(self):
         self.aboutsound.play()
         self.screentype = "about"
         self.lower ="""
+
 ╭─╮╭─╮╭─╮╷ ╷╶┬╴
 ├─┤├─┤│ ││ │ │ 
 ╵ ╵╰─╯╰─╯╰─╯ ╵ 
 
-A sandbox simulation game with 23 interactive elements, 4-way rotatable gravity, dynamic lighting, 11 brush shapes + achievements & hidden secrets.
-Runs entirely in the terminal. Check out Controls.md for detailed documentation of the controls in the simulation.
-Check out Elements.md for detailed documentation on the various elements in the game. Best played in Windows Terminal (TrueColor & Unicode).
-This game was made for the 2026 itch.io game off. Made entirely by Artemis689 in one month. License may be changed to be open source in 2027.
+A sandbox simulation game with 23 interactive elements, 4-way rotatable gravity, dynamic lighting, 11 brush shapes.
+Best played in Windows Terminal (TrueColor & Unicode). Game will restore terminal settings upon exit.
+Check out Controls.md for detailed documentation of the controls in the simulation.
+Check out Elements.md for detailed documentation on the various elements in the game.
+This game was made for the 2026 itch.io game off. Made entirely by Artemis689 in about one month. 
+
 
 ╷ ╷╭─╮╭─╴   ╭─╮╭─╴   ╭─╮  ╷ 
 │ │╰─╮├╴    │ │├╴    ├─┤  │ 
 ╰─╯╰─╯╰─╴   ╰─╯╵     ╵ ╵╵ ╵╵
 
-A.I. was used very sparingly in the development of this game. Only one or two functions were written by the help of A.I. and the Elements.md file was made
-using the help of A.I. for deep resourcing. Controls.md is completely hand made. A.I. was extensively used as the playtester for this game and to report bugs.
+A.I. was used very sparingly in the development of this game. Only one or two functions were written by the help of A.I. 
+A.I. was extensively used as the playtester for this game and to report bugs.
+
 
 ╭─╮╭─╮╭─╮╭─╴╶┬╴╭─╮
 ├─┤╰─╮╰─╮├╴  │ ╰─╮
 ╵ ╵╰─╯╰─╯╰─╴ ╵ ╰─╯
 
 ASCII Fonts: Lingahoulic Rounded, Future Rounded, Future (modified)
-Music: [SPIRAL by Sound Stabs royalty free] [link] | SFX: mixkit.co
+Music: [Kowloon by DIGITAL DESCENDANT] [https://open.spotify.com/track/4RTvCdg3jpSkwkejofKjb1] | SFX: mixkit.co
+
+
+
+
+
 
 \x1b[2m[Press ESC, Backspace, or ← to return]\x1b[22m
 """ 
@@ -205,9 +272,90 @@ Music: [SPIRAL by Sound Stabs royalty free] [link] | SFX: mixkit.co
         while mixer.get_busy():
             sleep(0.1)
         wipe_terminal_screen()
+        pyautogui.hotkey("f11")
+        pyautogui.hotkey("ctrl","0")
         mixer.quit()
         sys.exit(0)
 
+    def handle_settings_pointer(self):
+        global PERFORMANCE_MODE, UNDO_LIST, DYNAMIC_LIGHTING, SFX_VOL, MUSIC_VOL, MAX_UNDO
+
+        if self.key in ("DOWN", "S", "s"):
+            self.pointer = (self.pointer + 1) % len(self.settings)
+        elif self.key in ("UP", "W", "w"):
+            self.pointer = (self.pointer - 1) % len(self.settings)
+
+        screen = ""
+
+        for i, sett in enumerate(self.settings):
+            if i == self.pointer:   
+                screen +=  self.check_setting_dict[sett]
+                screen += " "
+            else: 
+                screen += self.empty_setting_dict[sett]
+            value = self.variable_dict[sett]
+            if sett == "PERFORMANCE MODE": value = "ON" if value else "OFF"
+            screen += "        [" + str(value) + "]"
+
+            screen += "\033[K\n\033[K\n"
+        screen += """
+
+
+
+
+
+
+
+\x1b[2m[Press ESC, Backspace, or ← to return]\x1b[22m"""
+
+        self.lower = screen
+
+        selected = self.settings[self.pointer]
+        if self.key in (" ", "enter", "RIGHT"):
+
+            if selected == "PERFORMANCE MODE":
+                PERFORMANCE_MODE = not PERFORMANCE_MODE
+                DYNAMIC_LIGHTING = not DYNAMIC_LIGHTING
+                if PERFORMANCE_MODE:
+                    UNDO_LIST = deque(UNDO_LIST, maxlen=100)
+                else:
+                    UNDO_LIST = deque(UNDO_LIST, maxlen=MAX_UNDO)
+
+            elif selected == "MUSIC VOL":
+                MUSIC_VOL = round((MUSIC_VOL + 0.01) % 1, 2)
+                mixer.music.set_volume(MUSIC_VOL)
+
+            elif selected == "SFX VOL":
+                SFX_VOL = round((SFX_VOL + 0.01) % 1, 2)
+                self.playsound.set_volume(SFX_VOL - 0.3)
+                self.aboutsound.set_volume(SFX_VOL)
+                self.settingssound.set_volume(SFX_VOL)
+                self.exitsound.set_volume(SFX_VOL)
+
+            elif selected == "DEFAULT":
+                PERFORMANCE_MODE = False
+                DYNAMIC_LIGHTING = True
+                UNDO_LIST = deque(UNDO_LIST, maxlen=MAX_UNDO)
+                MUSIC_VOL = 0.2
+                SFX_VOL = 0.5
+                mixer.music.set_volume(MUSIC_VOL)
+                self.playsound.set_volume(SFX_VOL - 0.3)
+                self.aboutsound.set_volume(SFX_VOL)
+                self.settingssound.set_volume(SFX_VOL)
+                self.exitsound.set_volume(SFX_VOL)
+
+        if self.key in ("esc", "del", "backspace", "LEFT"):
+            wipe_terminal_screen()
+            self.pointer = 1
+            self.screentype = "main"
+
+        self.variable_dict = {
+            "PERFORMANCE MODE": PERFORMANCE_MODE,
+            "MUSIC VOL": MUSIC_VOL*100,
+            "SFX VOL": SFX_VOL*100,
+            "DEFAULT": "---"
+        }
+            
     def handle_options(self) -> str:
         if self.screentype != "main":
             return ""
@@ -1770,9 +1918,6 @@ def game_loop(HUE_CHANGE, gravity_set, pause_set, shapes_set, grid: Grid, timer)
         handle_RBS(pressed_key)
         handle_framerate(pressed_key)
 
-        if PERFORMANCE_MODE:
-            UNDO_LIST.maxlen = 100  # IMPORTANT LEFT TO DO DEBUG FIX THIS : ADD UNDO_LIST = deque(UNDO_LIST, maxlen=100) ONCE PERFMODE IS TOGGLED!
-
         if ticked or pressed_key is not None:
             grid.show(extra=[   
         f"Pointer: ({grid.pointer_x}, {grid.pointer_y}) [{PROFILE[grid.matrix[grid.pointer_y][grid.pointer_x].state]["name"]}]", 
@@ -1819,7 +1964,7 @@ def main():
     UNDO_LIST = deque(maxlen=MAX_UNDO) 
     PERFORMANCE_MODE = False
 
-    MUSIC_VOL = 0.1 # 0.2
+    MUSIC_VOL = 0.2 # 0.2
     SFX_VOL = 0.5 # 0.5
 
     with open("data.json", "r", encoding="utf-8") as file:
@@ -1909,7 +2054,7 @@ def main():
         GRAPHITE : {"name": "Graphite",
                "symbol": "◙",
                "color": (200, 65, 45),
-               "transparency": 100,
+               "transparency": 30,
                "weight": 0},
         ICE : {"name": "Ice",
                "symbol": "◙",
@@ -1939,7 +2084,7 @@ def main():
         VOID : {"name": "Void",
                "symbol": "▦",
                "color": (270, 60, 30),
-               "transparency": 0,
+               "transparency": 100,
                "weight": 0}
     }
 
@@ -1968,15 +2113,20 @@ def main():
     timer = Timer()
 
     mixer.init()
-    mixer.music.load("sounds/music/SPIRAL_soundstabs.mp3")
+    mixer.music.load("sounds/music/Kowloon.mp3")
     ACH_SFX = mixer.Sound("sounds/sfx/achievement.wav")
     ACH_SFX.set_volume(SFX_VOL)
     ACT_SFX = mixer.Sound("sounds/sfx/enter.wav")
     ACT_SFX.set_volume(SFX_VOL)
     ESC_SFX = mixer.Sound("sounds/sfx/esc.wav")
-    ESC_SFX.set_volume(SFX_VOL)
+    ESC_SFX.set_volume(SFX_VOL + 0.3)
     mixer.music.set_volume(MUSIC_VOL)
     mixer.music.play(-1)
+
+    # setting up the terminal
+    pyautogui.hotkey("f11")
+    pyautogui.hotkey("ctrl","-")
+    pyautogui.hotkey("ctrl","-")
 
     # main loops
     while True:
@@ -1992,4 +2142,6 @@ if __name__ == "__main__":
     finally:
         show_terminal_cursor()
     mixer.quit()
+    pyautogui.hotkey("ctrl","0")
+    pyautogui.hotkey("f11")
 # master

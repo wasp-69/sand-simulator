@@ -4,8 +4,9 @@
 
 - `WASD` to **move** around.
 - `Shift + WASD` to **jump** cursor around.
-- `SPACE` to **paint**.
-- `del` or `backspace` delete the element under cursor.
+- `SPACE` to **paint** according to the brush shape.
+- `del` or `backspace` **delete** the element under _cursor_.
+- `enter` to **paint** only the _cursor_ cell.
 
 ## Brush Control
 
@@ -30,4 +31,4 @@
 - `Shift + C` to **clear** the entire sandbox.
 - `` ` `` to stop **cursor RGB**.
 - `/` to turn off radiation visuals.
-- `?secret code?` for an **easter egg**!
+- `some secret code` for an **easter egg**!
