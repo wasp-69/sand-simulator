@@ -5,7 +5,7 @@
 - `WASD` to **move** around.
 - `Shift + WASD` to **jump** cursor around.
 - `SPACE` to **paint** according to the brush shape.
-- `del` or `backspace` **delete** the element under _cursor_.
+- `del` **delete** the element under _cursor_.
 - `enter` to **paint** only the _cursor_ cell.
 
 ## Brush Control

@@ -1,3 +1,4 @@
+import os
 import sys
 import random
 from time import sleep, perf_counter
@@ -107,8 +108,8 @@ class TitleScreen:
      "PERFORMANCE MODE":
 """
 ╭─╮      ╭─╮╭─╴╭─╮╭─╴╭─╮╭─╮╭┬╮╭─╮╭╮╷╭─╴╭─╴   ╭┬╮╭─╮╶┬╮╭─╴\033[K
-│││      ├─╯├╴ ├┬╯├╴ │ │├┬╯│││├─┤│╰┤│  ├╴    ││││ │ ││├╴ \033[K
-╰─╯      ╵  ╰─╴╵╰╴╵  ╰─╯╵╰╴╵ ╵╵ ╵╵ ╵╰─╴╰─╴   ╵ ╵╰─╯╶┴╯╰─╴\033[K
+│││      ├─╯├╴ ├┬╯├╴ │ │├┬╯│││├─┤││││  ├╴    ││││ │ ││├╴ \033[K
+╰─╯      ╵  ╰─╴╵╰╴╵  ╰─╯╵╰╴╵ ╵╵ ╵╵╰╯╰─╴╰─╴   ╵ ╵╰─╯╶┴╯╰─╴\033[K
 """, "MUSIC VOL":
 """
 ╭─╮      ╭┬╮╷ ╷╭─╮╷╭─╴   ╷  ╷╭─╮╷  \033[K
@@ -130,8 +131,8 @@ class TitleScreen:
      "PERFORMANCE MODE":
 """
 ╭─╮     ╭─╮╭─╴╭─╮╭─╴╭─╮╭─╮╭┬╮╭─╮╭╮╷╭─╴╭─╴   ╭┬╮╭─╮╶┬╮╭─╴\033[K
-│ │     ├─╯├╴ ├┬╯├╴ │ │├┬╯│││├─┤│╰┤│  ├╴    ││││ │ ││├╴ \033[K
-╰─╯     ╵  ╰─╴╵╰╴╵  ╰─╯╵╰╴╵ ╵╵ ╵╵ ╵╰─╴╰─╴   ╵ ╵╰─╯╶┴╯╰─╴\033[K
+│ │     ├─╯├╴ ├┬╯├╴ │ │├┬╯│││├─┤││││  ├╴    ││││ │ ││├╴ \033[K
+╰─╯     ╵  ╰─╴╵╰╴╵  ╰─╯╵╰╴╵ ╵╵ ╵╵╰╯╰─╴╰─╴   ╵ ╵╰─╯╶┴╯╰─╴\033[K
 """, "MUSIC VOL":
 """
 ╭─╮     ╭┬╮╷ ╷╭─╮╷╭─╴   ╷  ╷╭─╮╷  \033[K
@@ -151,8 +152,8 @@ class TitleScreen:
         }
         self.variable_dict = {
             "PERFORMANCE MODE": PERFORMANCE_MODE,
-            "MUSIC VOL": MUSIC_VOL*100,
-            "SFX VOL": SFX_VOL*100,
+            "MUSIC VOL": round(MUSIC_VOL*100),
+            "SFX VOL": round(SFX_VOL*100),
             "DEFAULT": "---"
         }
 
@@ -165,7 +166,7 @@ class TitleScreen:
         self.lower = ""
 
         self.playsound = mixer.Sound("sounds/sfx/about.wav")
-        self.playsound.set_volume(SFX_VOL - 0.3)
+        self.playsound.set_volume(max(0, SFX_VOL - 0.3))
         self.exitsound = mixer.Sound("sounds/sfx/exit.wav")
         self.exitsound.set_volume(SFX_VOL)
         self.aboutsound = mixer.Sound("sounds/sfx/menutogame.wav")
@@ -262,7 +263,7 @@ Music: [Kowloon by DIGITAL DESCENDANT] [https://open.spotify.com/track/4RTvCdg3j
 
 
 
-\x1b[2m[Press ESC, Backspace, or ← to return]\x1b[22m
+\x1b[2m[Press ESC to return]\x1b[22m
 """ 
         wipe_terminal_screen()
 
@@ -278,7 +279,7 @@ Music: [Kowloon by DIGITAL DESCENDANT] [https://open.spotify.com/track/4RTvCdg3j
         sys.exit(0)
 
     def handle_settings_pointer(self):
-        global PERFORMANCE_MODE, UNDO_LIST, DYNAMIC_LIGHTING, SFX_VOL, MUSIC_VOL, MAX_UNDO
+        global PERFORMANCE_MODE, UNDO_LIST, DYNAMIC_LIGHTING, SFX_VOL, MUSIC_VOL, MAX_UNDO, ACH_SFX, ACT_SFX, ESC_SFX
 
         if self.key in ("DOWN", "S", "s"):
             self.pointer = (self.pointer + 1) % len(self.settings)
@@ -306,7 +307,7 @@ Music: [Kowloon by DIGITAL DESCENDANT] [https://open.spotify.com/track/4RTvCdg3j
 
 
 
-\x1b[2m[Press ESC, Backspace, or ← to return]\x1b[22m"""
+\x1b[2m[Press ESC to return]\x1b[22m"""
 
         self.lower = screen
 
@@ -327,10 +328,13 @@ Music: [Kowloon by DIGITAL DESCENDANT] [https://open.spotify.com/track/4RTvCdg3j
 
             elif selected == "SFX VOL":
                 SFX_VOL = round((SFX_VOL + 0.01) % 1, 2)
-                self.playsound.set_volume(SFX_VOL - 0.3)
+                self.playsound.set_volume(max(0, SFX_VOL - 0.3))
                 self.aboutsound.set_volume(SFX_VOL)
                 self.settingssound.set_volume(SFX_VOL)
                 self.exitsound.set_volume(SFX_VOL)
+                ACH_SFX.set_volume(SFX_VOL)
+                ACT_SFX.set_volume(SFX_VOL)
+                ESC_SFX.set_volume(SFX_VOL)
 
             elif selected == "DEFAULT":
                 PERFORMANCE_MODE = False
@@ -339,10 +343,13 @@ Music: [Kowloon by DIGITAL DESCENDANT] [https://open.spotify.com/track/4RTvCdg3j
                 MUSIC_VOL = 0.2
                 SFX_VOL = 0.5
                 mixer.music.set_volume(MUSIC_VOL)
-                self.playsound.set_volume(SFX_VOL - 0.3)
+                self.playsound.set_volume(max(0, SFX_VOL - 0.3))
                 self.aboutsound.set_volume(SFX_VOL)
                 self.settingssound.set_volume(SFX_VOL)
                 self.exitsound.set_volume(SFX_VOL)
+                ACH_SFX.set_volume(SFX_VOL)
+                ACT_SFX.set_volume(SFX_VOL)
+                ESC_SFX.set_volume(SFX_VOL)
 
         if self.key in ("esc", "del", "backspace", "LEFT"):
             wipe_terminal_screen()
@@ -351,8 +358,8 @@ Music: [Kowloon by DIGITAL DESCENDANT] [https://open.spotify.com/track/4RTvCdg3j
 
         self.variable_dict = {
             "PERFORMANCE MODE": PERFORMANCE_MODE,
-            "MUSIC VOL": MUSIC_VOL*100,
-            "SFX VOL": SFX_VOL*100,
+            "MUSIC VOL": round(MUSIC_VOL*100),
+            "SFX VOL": round(SFX_VOL*100),
             "DEFAULT": "---"
         }
             
@@ -365,6 +372,8 @@ Music: [Kowloon by DIGITAL DESCENDANT] [https://open.spotify.com/track/4RTvCdg3j
             if i == self.pointer:    screen +=  self.check_ascii_dict[opt]
             else: screen += self.empty_ascii_dict[opt]
             screen += "\033[K\n\033[K\n"
+
+        screen += "\n"*10 + "\x1b[2m[WASD to move, SPACE to select]\x1b[22m"
 
         self.lower = screen
 
@@ -796,9 +805,9 @@ class Grid:
 
     def handle_fire(self, cell: Cell):
         n: tuple[Cell] = neighbours(cell, self, 5, True)
-        not_flammables = (AIR, WATER, STEEL, SAND, ACID, STEAM, FIRE, LAVA, OBSIDIAN, URANIUM, CRYSTAL, GLASS, GRAPHITE, MORPH, PUMP)
+        not_flammables = (AIR, WATER, STEEL, SAND, ACID, STEAM, FIRE, LAVA, OBSIDIAN, URANIUM, CRYSTAL, GLASS, GRAPHITE, MORPH, PUMP, VOID)
 
-        if all(cell.state in not_flammables for cell in n): # fire is surrounded by non-flammable materials
+        if all(c.state in not_flammables for c in n): # fire is surrounded by non-flammable materials
             if random.random() < 0.2:
                 cell.state = AIR
                 return
@@ -1183,7 +1192,7 @@ class Grid:
         global ACT_SFX
         brush_size = self.brush_size - 1
 
-        if key in ("backspace", "del"):
+        if key == "del":
             self.matrix[self.pointer_y][self.pointer_x].state = AIR
             return
 
@@ -1615,6 +1624,7 @@ class Grid:
         reset_terminal_cursor_pos()
         sys.stdout.write(grid)
         sys.stdout.write("╚" + ("═"*(2*self.length+1)) + "╝" + "\n")
+        sys.stdout.write("\n"*11 + "\033[2m[<WASD> move, <Space> draw, <Q/E> element, <Shift+Q/E> shape, <Arrows> rotate gravity, <Esc> menu]\033[0m")
         sys.stdout.flush()
         self.reset_radiation_flags()
         self.reset_add_hue()
@@ -1888,7 +1898,7 @@ def game_loop(HUE_CHANGE, gravity_set, pause_set, shapes_set, grid: Grid, timer)
     while True:
         pressed_key = get_keypress()
 
-        if pressed_key == "esc":
+        if pressed_key in ("esc", "backspace"):
             wipe_terminal_screen()
             ESC_SFX.play()
             break
@@ -1939,6 +1949,15 @@ def main():
         MIN_BRUSH_SIZE, MAX_BRUSH_SIZE, DEFAULT_BRUSH_SIZE, \
         RAINBOW_SAND, HUE, RBS_COUNTER, PROFILE, TYPE_DICT, PERFORMANCE_MODE, \
         ACHIEVEMENTS, ACH_SFX, ACT_SFX, ESC_SFX, MUSIC_VOL, SFX_VOL
+
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+
+    if getattr(sys, "frozen", False):
+        base_dir = os.path.dirname(os.path.abspath(sys.executable))
+    else:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+    os.chdir(base_dir)
 
     L, B = 30, 30 # length and height of the grid [default: 30x30]
 
